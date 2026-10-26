@@ -23,6 +23,18 @@ function SetupRequired({ reason }: { reason: string }) {
     <main className="mx-auto max-w-2xl px-4 py-16">
       <h1 className="text-2xl font-semibold">RGK WorkTrack — setup required</h1>
       <p className="mt-3 text-muted-foreground">{reason}</p>
+      <div className="mt-4 mb-6">
+        <button
+          type="button"
+          className="px-4 py-2 bg-primary text-white font-medium rounded-md text-sm hover:opacity-90 cursor-pointer"
+          onClick={() => {
+            localStorage.setItem('rgk_backend_mode', 'demo');
+            window.location.reload();
+          }}
+        >
+          Open in Demo Mode (Login with ADMIN01 / RGK@1090)
+        </button>
+      </div>
       <ol className="mt-6 list-decimal space-y-2 pl-5 text-sm">
         <li>Create a Firebase project (Blaze plan, for Cloud Functions) and a Web app in it.</li>
         <li>Copy <code>web/.env.example</code> to <code>web/.env.production.local</code> and fill in the <code>VITE_FIREBASE_*</code> values.</li>

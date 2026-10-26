@@ -25,20 +25,18 @@ export interface FirebaseEnv {
   useEmulators: boolean;
 }
 
-export function readFirebaseEnv(): FirebaseEnv | null {
+export function readFirebaseEnv(): FirebaseEnv {
   const env = import.meta.env;
-  const cfg = {
-    apiKey: env.VITE_FIREBASE_API_KEY ?? '',
-    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
-    projectId: env.VITE_FIREBASE_PROJECT_ID ?? '',
-    storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || undefined,
-    messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || undefined,
-    appId: env.VITE_FIREBASE_APP_ID ?? '',
+  return {
+    apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyDeZeLTNEVQcfNLFwymHEDxL2DnBfuy3FA',
+    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'task-8861a.firebaseapp.com',
+    projectId: env.VITE_FIREBASE_PROJECT_ID || 'task-8861a',
+    storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || 'task-8861a.firebasestorage.app',
+    messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '783521347645',
+    appId: env.VITE_FIREBASE_APP_ID || '1:783521347645:web:40df826eb1c32c5acf5254',
     region: env.VITE_FIREBASE_FUNCTIONS_REGION || 'asia-south1',
     useEmulators: env.VITE_USE_EMULATORS === 'true',
   };
-  if (!cfg.projectId || !cfg.apiKey) return null;
-  return cfg;
 }
 
 function mapAuthError(e: unknown): AuthFailure {
