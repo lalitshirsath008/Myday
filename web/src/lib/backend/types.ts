@@ -32,7 +32,7 @@ export class AuthFailure extends Error {
  * the demo implementation runs the same server logic in the browser on fictional test data.
  */
 export interface Backend {
-  mode: 'firebase' | 'demo';
+  mode: 'firebase' | 'demo' | 'live';
   onAuthChange(cb: (session: Session | null) => void): () => void;
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;

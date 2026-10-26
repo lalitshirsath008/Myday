@@ -19,4 +19,4 @@ export type { RoutineItem } from './ops/routine';
 export { createEmployee } from './ops/admin';
 export { syntheticEmail, isSyntheticEmail } from './ops/auth';
 export { type UserSummary, type UserProfile, firstName } from './ops/helpers';
-export { seedDemoData, DEMO_PASSWORD } from './seed';
+export { seedDemoData, DEMO_PASSWORD, seedProductionData, ADMIN_PASSWORD } from './seed';

@@ -15,3 +15,8 @@ ui-debug.log*
 test-results/
 playwright-report/
 serviceAccountKey*.json
+
+# Firebase service-account keys: never commit
+serviceAccountKey.json
+*firebase-adminsdk*.json
+scratch/

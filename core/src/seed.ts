@@ -17,6 +17,7 @@ import { normalizeName, searchTokens, SETTINGS_ID } from './ops/helpers';
 import { codeKey, phoneKey, syntheticEmail } from './ops/auth';
 
 export const DEMO_PASSWORD = 'Test@1234';
+export const ADMIN_PASSWORD = 'RGK@1090';
 
 interface SeedPerson {
   key: string;
@@ -382,4 +383,79 @@ async function generateHistory(args: {
       }
     }
   }
+}
+
+/**
+ * Seed production baseline data: 23 full RGK departments and Super Admin ADMIN01.
+ * Clean slate with NO test users, NO dummy tasks.
+ */
+export async function seedProductionData(
+  store: Store,
+  auth: AuthAdmin,
+  opts: { now?: Date; appUrl?: string } = {},
+): Promise<void> {
+  const realNow = opts.now ?? new Date();
+  const settings = defaultSettings(realNow.toISOString());
+  const tz = settings.timezone;
+  const today = todayIn(tz, realNow);
+  const nowIso = realNow.toISOString();
+
+  const admin01Id = 'seed_admin01';
+  const admin01: UserDoc = {
+    id: admin01Id,
+    employeeCode: 'ADMIN01',
+    fullName: 'RGK Admin',
+    normalizedName: normalizeName('RGK Admin'),
+    searchTokens: [],
+    phoneNumber: '9000000000',
+    officialEmail: 'Admin@rgk.com',
+    authEmail: 'admin@rgk.com',
+    departmentId: 'dept_mgmt',
+    designation: 'Super Administrator',
+    role: 'SUPER_ADMIN',
+    primaryReportingManagerId: null,
+    secondaryReviewerId: null,
+    accountStatus: 'ACTIVE',
+    joinedAt: addDays(today, -60),
+    activatedAt: nowIso,
+    deactivatedAt: null,
+    alternatePhone: '',
+    location: 'Head Office',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    createdBy: null,
+  };
+  admin01.searchTokens = searchTokens(admin01);
+
+  await store.transaction(async (tx) => {
+    tx.set(COL.systemSettings, SETTINGS_ID, { ...settings, id: SETTINGS_ID } as never);
+    for (const d of RGK_DEPARTMENTS) {
+      tx.set(COL.departments, d.id, {
+        id: d.id,
+        name: d.name,
+        code: d.code,
+        description: `${d.name} Department`,
+        active: true,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+    }
+    tx.set(COL.users, admin01Id, admin01 as never);
+    for (const k of [
+      codeKey('ADMIN01'),
+      codeKey('admin01'),
+      phoneKey('9000000000'),
+      'email_admin@rgk.com',
+      'email_Admin@rgk.com',
+    ]) {
+      tx.set(COL.uniqueKeys, k, { id: k, ownerId: admin01Id, createdAt: nowIso });
+    }
+  });
+
+  try {
+    await auth.createUser({ uid: admin01Id, email: 'admin@rgk.com', disabled: false });
+  } catch {
+    // Already created
+  }
+  await auth.setPassword(admin01Id, 'RGK@1090');
 }
