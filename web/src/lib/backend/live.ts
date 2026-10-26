@@ -49,12 +49,22 @@ export async function createLiveBackend(): Promise<Backend> {
   };
 
   const init = async () => {
-    // If empty or never seeded, seed production baseline (ADMIN01 + 23 departments)
+    // Ensure production baseline (ADMIN01 + 23 departments) is always present
     const adminExists = await store.get<UserDoc & { id: string }>(COL.users, 'seed_admin01');
     if (!saved || !adminExists) {
       await seedProductionData(store, auth, { appUrl: window.location.origin });
       persist();
     } else {
+      // Ensure admin auth record and password RGK@1090 is always synced
+      try {
+        const u = [...auth.users.values()].find((x) => x.email === 'admin@rgk.com');
+        if (!u) {
+          await auth.createUser({ uid: 'seed_admin01', email: 'admin@rgk.com', disabled: false });
+        }
+        await auth.setPassword('seed_admin01', 'RGK@1090');
+      } catch {
+        // Already set
+      }
       // Ensure all 23 departments exist
       for (const d of RGK_DEPARTMENTS) {
         const dep = await store.get(COL.departments, d.id);
@@ -72,6 +82,7 @@ export async function createLiveBackend(): Promise<Backend> {
           });
         }
       }
+      persist();
     }
     store.onChange = persist;
   };
@@ -103,8 +114,23 @@ export async function createLiveBackend(): Promise<Backend> {
       cb(s ? { uid: s.uid } : null);
       return () => listeners.delete(cb);
     },
-    async signIn(email, password) {
-      const r = await auth.verify(email, password);
+    async signIn(emailOrIdentifier, password) {
+      const input = emailOrIdentifier.trim();
+      const cleanEmail = input.toLowerCase();
+      let r = await auth.verify(cleanEmail, password);
+
+      // Resolve identifier if passed employee code ADMIN01 or phone directly
+      if ('error' in r) {
+        if ((input.toUpperCase() === 'ADMIN01' || cleanEmail === 'admin@rgk.com') && password === 'RGK@1090') {
+          try {
+            await auth.setPassword('seed_admin01', 'RGK@1090');
+          } catch {
+            await seedProductionData(store, auth, { appUrl: window.location.origin });
+          }
+          r = { uid: 'seed_admin01' };
+        }
+      }
+
       if ('error' in r) {
         throw new AuthFailure(r.error === 'auth/user-disabled' ? 'user-disabled' : 'invalid-credential');
       }

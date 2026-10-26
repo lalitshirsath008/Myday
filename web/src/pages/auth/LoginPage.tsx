@@ -35,11 +35,17 @@ export function LoginPage() {
   const onSubmit = handleSubmit(async ({ identifier, password }) => {
     setError(null);
     try {
-      const { email } = await api('auth.resolveIdentifier', { identifier });
+      let email = identifier.trim();
+      try {
+        const resolved = await api('auth.resolveIdentifier', { identifier: email });
+        if (resolved?.email) email = resolved.email;
+      } catch {
+        // Fallback directly to identifier
+      }
       await backend().signIn(email, password);
       navigate(from, { replace: true });
     } catch (e) {
-      setError(e instanceof AuthFailure ? MESSAGES[e.reason]! : MESSAGES.unknown!);
+      setError(e instanceof AuthFailure ? MESSAGES[e.reason]! : (e as Error)?.message || MESSAGES.unknown!);
     }
   });
 

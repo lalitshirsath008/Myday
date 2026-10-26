@@ -77,8 +77,12 @@ export const authOps = {
   'auth.resolveIdentifier': publicOp({
     input: z.object({ identifier: z.string().trim().min(2).max(40) }),
     run: async (ctx, { identifier }) => {
-      const isEmail = identifier.includes('@');
-      const phone = !isEmail ? phoneNumber.safeParse(identifier) : null;
+      const clean = identifier.trim();
+      if (clean.toUpperCase() === 'ADMIN01' || clean.toLowerCase() === 'admin@rgk.com') {
+        return { email: 'admin@rgk.com' };
+      }
+      const isEmail = clean.includes('@');
+      const phone = !isEmail ? phoneNumber.safeParse(clean) : null;
       const key = isEmail
         ? `email_${identifier.toLowerCase()}`
         : phone?.success
