@@ -1,6 +1,5 @@
 import { BadgeCheck, Cog, type LucideIcon, Truck, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { backend } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const QUOTE_WORDS = ['Your', 'actions', 'speak', 'louder', 'than', 'words.'];
@@ -103,11 +102,6 @@ export function AuthLayout({ title, subtitle, children, wide }: { title: string;
             {subtitle && <p className="mt-1 text-[13px] text-muted-foreground">{subtitle}</p>}
             <div className="mt-5">{children}</div>
           </div>
-          {backend().mode === 'demo' && (
-            <p className="mt-4 rounded-2xl bg-warning-soft px-4 py-2.5 text-center text-[12px] text-warning">
-              <strong>Demo mode</strong> · try <code>EMP201</code>, <code>RM101</code>, <code>MG001</code> or <code>SA001</code> with password <code>Test@1234</code>
-            </p>
-          )}
           <p className="mt-6 text-center text-[11px] text-muted-foreground lg:hidden">RGK Group of Industries · Internal use only</p>
         </div>
       </section>

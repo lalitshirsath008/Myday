@@ -81,21 +81,6 @@ export function LoginPage() {
           Request access
         </Link>
       </p>
-      <div className="mt-4 pt-3 border-t text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-        <span>Mode: <strong className="text-foreground">{backend().mode === 'firebase' ? 'Firebase Live' : 'Demo Mode'}</strong></span>
-        <span>·</span>
-        <button
-          type="button"
-          onClick={() => {
-            const next = backend().mode === 'firebase' ? 'demo' : 'firebase';
-            localStorage.setItem('rgk_backend_mode', next);
-            window.location.reload();
-          }}
-          className="text-primary hover:underline cursor-pointer font-medium"
-        >
-          Switch to {backend().mode === 'firebase' ? 'Demo Mode' : 'Firebase Live'}
-        </button>
-      </div>
     </AuthLayout>
   );
 }

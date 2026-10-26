@@ -1,12 +1,9 @@
 import { ROLE_LABELS } from '@rgk/core';
-import { ChevronsLeft, ChevronsRight, KeyRound, LogOut, Moon, RotateCcw, Search, Sun, UserCircle } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, KeyRound, LogOut, Moon, Search, Sun, UserCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/components/ui/dialog';
 import { Avatar, Menu, Sheet } from '@/components/ui/misc';
-import { backend } from '@/lib/api';
 import { bottomNavFor, homeFor, navFor } from '@/lib/nav';
 import { useMe, useSession } from '@/lib/session';
 import { useTheme } from '@/lib/theme';
@@ -113,36 +110,6 @@ function BottomNav() {
   );
 }
 
-function DemoBanner() {
-  const [confirm, setConfirm] = useState(false);
-  const [busy, setBusy] = useState(false);
-  if (backend().mode !== 'demo') return null;
-  return (
-    <div className="no-print flex items-center justify-center gap-2 bg-warning-soft px-4 py-1.5 text-center text-[12px] font-medium text-warning">
-      <span>Demo mode<span className="hidden sm:inline"> · test data in this browser only</span></span>
-      <button className="inline-flex cursor-pointer items-center gap-1 underline underline-offset-2" onClick={() => setConfirm(true)}>
-        <RotateCcw className="size-3" aria-hidden /> Reset<span className="hidden sm:inline"> demo data</span>
-      </button>
-      <ConfirmDialog
-        open={confirm}
-        onOpenChange={setConfirm}
-        title="Reset demo data?"
-        description="All demo changes in this browser are discarded and fresh test data is generated. You will be signed out."
-        confirmLabel="Reset"
-        tone="warning"
-        loading={busy}
-        onConfirm={async () => {
-          setBusy(true);
-          await backend().resetDemoData?.();
-          setBusy(false);
-          setConfirm(false);
-          toast.success('Demo data reset');
-        }}
-      />
-    </div>
-  );
-}
-
 export function AppShell() {
   const me = useMe();
   const { signOut } = useSession();
@@ -164,7 +131,6 @@ export function AppShell() {
 
   return (
     <div className="min-h-dvh">
-      <DemoBanner />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[60] focus:rounded-xl focus:bg-card focus:px-3 focus:py-2">
         Skip to content
       </a>
