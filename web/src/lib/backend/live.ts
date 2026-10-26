@@ -1,10 +1,10 @@
 /**
- * RGK WorkTrack LIVE Standalone Engine.
+ * RGK Myday LIVE Cloud-Connected Standalone Engine.
  *
  * Runs full server operations (@rgk/core: validation, permissions, 23 departments,
  * daily/weekly reports, reviews, analytics, routines, and user management)
- * directly with persistent browser storage and zero dependence on Google Cloud Functions
- * or paid Blaze plans. 100% Free forever.
+ * directly with persistent Cloud Firestore (task-8861a) and browser caching.
+ * Zero dependence on Google Cloud Functions or paid Blaze plans. 100% Free forever.
  */
 import {
   AppError,
@@ -16,7 +16,17 @@ import {
   seedProductionData,
   type UserDoc,
 } from '@rgk/core';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDocs,
+  collection,
+  type Firestore,
+} from 'firebase/firestore';
 import { ApiError, AuthFailure, type Backend, type Session } from './types';
+import { readFirebaseEnv } from './firebase';
 
 const DATA_KEY = 'rgk_worktrack_live_db_v1';
 const SESSION_KEY = 'rgk_worktrack_live_session_v1';
@@ -26,7 +36,7 @@ interface Persisted {
   auth: ReturnType<MemoryAuth['snapshot']>;
 }
 
-function load(): Persisted | null {
+function loadLocal(): Persisted | null {
   try {
     const raw = localStorage.getItem(DATA_KEY);
     return raw ? (JSON.parse(raw) as Persisted) : null;
@@ -36,22 +46,132 @@ function load(): Persisted | null {
 }
 
 export async function createLiveBackend(): Promise<Backend> {
-  const saved = load();
+  const saved = loadLocal();
   const store = new MemoryStore(saved?.store);
   const auth = new MemoryAuth(saved?.auth);
 
-  const persist = () => {
+  // Initialize Firestore
+  const cfg = readFirebaseEnv();
+  const fbApp = getApps().length
+    ? getApp()
+    : initializeApp({
+        apiKey: cfg.apiKey,
+        authDomain: cfg.authDomain,
+        projectId: cfg.projectId,
+        storageBucket: cfg.storageBucket,
+        messagingSenderId: cfg.messagingSenderId,
+        appId: cfg.appId,
+      });
+  const db: Firestore = getFirestore(fbApp);
+
+  const persistToFirestore = async () => {
     try {
-      localStorage.setItem(DATA_KEY, JSON.stringify({ store: store.snapshot(), auth: auth.snapshot() } satisfies Persisted));
+      const snap = store.snapshot();
+      const collectionsToSync = [
+        'users',
+        'departments',
+        'dailyReports',
+        'weeklyReports',
+        'tasks',
+        'systemSettings',
+        'projects',
+        'workCalendar',
+      ];
+      for (const colName of collectionsToSync) {
+        const colDocs = snap[colName];
+        if (colDocs) {
+          for (const [id, data] of Object.entries(colDocs)) {
+            // Asynchronously sync to Cloud Firestore
+            setDoc(doc(db, colName, id), data).catch(() => {});
+          }
+        }
+      }
+      for (const u of auth.snapshot()) {
+        setDoc(doc(db, 'authUsers', u.uid), u).catch(() => {});
+      }
     } catch {
-      // Storage quota or private browsing mode
+      // Background sync non-fatal error
     }
   };
 
+  const persist = () => {
+    try {
+      localStorage.setItem(
+        DATA_KEY,
+        JSON.stringify({ store: store.snapshot(), auth: auth.snapshot() } satisfies Persisted)
+      );
+    } catch {
+      // Storage quota or private browsing mode
+    }
+    // Mirror to Cloud Firestore
+    void persistToFirestore();
+  };
+
   const init = async () => {
-    // Ensure production baseline (ADMIN01 + 23 departments) is always present
+    // 1. Try to hydrate from Cloud Firestore first
+    try {
+      const [usersSnap, authSnap, deptSnap, dailySnap, weeklySnap] = await Promise.all([
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'authUsers')),
+        getDocs(collection(db, 'departments')),
+        getDocs(collection(db, 'dailyReports')),
+        getDocs(collection(db, 'weeklyReports')),
+      ]);
+
+      if (!usersSnap.empty) {
+        await store.transaction(async (tx) => {
+          usersSnap.forEach((d) => {
+            tx.set(COL.users, d.id, d.data() as never);
+          });
+        });
+      }
+
+      if (!authSnap.empty) {
+        authSnap.forEach((d) => {
+          const u = d.data() as {
+            uid: string;
+            email: string;
+            disabled: boolean;
+            salt: string | null;
+            hash: string | null;
+            tokensValidAfter: number;
+          };
+          if (u.uid) {
+            auth.users.set(u.uid, u);
+          }
+        });
+      }
+
+      if (!deptSnap.empty) {
+        await store.transaction(async (tx) => {
+          deptSnap.forEach((d) => {
+            tx.set(COL.departments, d.id, d.data() as never);
+          });
+        });
+      }
+
+      if (!dailySnap.empty) {
+        await store.transaction(async (tx) => {
+          dailySnap.forEach((d) => {
+            tx.set(COL.dailyReports, d.id, d.data() as never);
+          });
+        });
+      }
+
+      if (!weeklySnap.empty) {
+        await store.transaction(async (tx) => {
+          weeklySnap.forEach((d) => {
+            tx.set(COL.weeklyReports, d.id, d.data() as never);
+          });
+        });
+      }
+    } catch (err) {
+      console.warn('Hydration from Cloud Firestore notice (offline/initial):', err);
+    }
+
+    // 2. Ensure baseline ADMIN01 + 23 departments exist
     const adminExists = await store.get<UserDoc & { id: string }>(COL.users, 'seed_admin01');
-    if (!saved || !adminExists) {
+    if (!adminExists) {
       await seedProductionData(store, auth, { appUrl: window.location.origin });
       persist();
     } else {
@@ -65,6 +185,7 @@ export async function createLiveBackend(): Promise<Backend> {
       } catch {
         // Already set
       }
+
       // Ensure all 23 departments exist
       for (const d of RGK_DEPARTMENTS) {
         const dep = await store.get(COL.departments, d.id);
@@ -107,7 +228,7 @@ export async function createLiveBackend(): Promise<Backend> {
   };
 
   return {
-    mode: 'firebase', // UI treats this as live production mode (no demo banners)
+    mode: 'firebase', // UI treats this as live production mode
     onAuthChange(cb) {
       listeners.add(cb);
       const s = readSession();
@@ -128,6 +249,25 @@ export async function createLiveBackend(): Promise<Backend> {
             await seedProductionData(store, auth, { appUrl: window.location.origin });
           }
           r = { uid: 'seed_admin01' };
+        } else {
+          // Check Firestore if authUsers has record (e.g. created on another device)
+          try {
+            const authSnap = await getDocs(collection(db, 'authUsers'));
+            authSnap.forEach((d) => {
+              const u = d.data() as {
+                uid: string;
+                email: string;
+                disabled: boolean;
+                salt: string | null;
+                hash: string | null;
+                tokensValidAfter: number;
+              };
+              if (u.uid) auth.users.set(u.uid, u);
+            });
+            r = await auth.verify(cleanEmail, password);
+          } catch {
+            // Ignore
+          }
         }
       }
 
