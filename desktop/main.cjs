@@ -5,16 +5,7 @@ const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell } = 
 const fs = require('node:fs');
 const path = require('node:path');
 
-const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
-const APP_URL = new URL(process.env.RGK_APP_URL || config.appUrl);
-const PANEL_URL = new URL('/widget/my-day', APP_URL).toString();
-const TAB = { width: 34, height: 112 };
-const PANEL_WIDTH = 420;
-
-let tab, panel, tray;
-let lastBlurHide = 0;
-
-// ---- small persisted settings (tab position) ----
+// ---- small persisted settings (tab position & server URL) ----
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 function readSettings() {
   try {
@@ -30,6 +21,17 @@ function writeSettings(patch) {
     // Not critical: the tab just goes back to its default place next time.
   }
 }
+
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+const activeSettings = readSettings();
+const appUrlStr = process.env.RGK_APP_URL || activeSettings.appUrl || config.appUrl;
+let APP_URL = new URL(appUrlStr);
+let PANEL_URL = new URL('/widget/my-day', APP_URL).toString();
+const TAB = { width: 34, height: 112 };
+const PANEL_WIDTH = 420;
+
+let tab, panel, tray;
+let lastBlurHide = 0;
 
 const workArea = () => screen.getPrimaryDisplay().workArea;
 
@@ -84,14 +86,14 @@ function createPanel() {
     thickFrame: false,
     show: false,
     backgroundColor: '#ffffff',
-    title: 'My day — RGK WorkTrack',
+    title: 'My day — RGK Myday',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'panel-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   panel.setAlwaysOnTop(true, 'screen-saver');
   panel.loadURL(PANEL_URL);
 
-  // Stay on the WorkTrack site; anything else opens in the normal browser.
+  // Stay on the RGK Myday site; anything else opens in the normal browser.
   panel.webContents.on('will-navigate', (e, url) => {
     if (new URL(url).origin !== APP_URL.origin) {
       e.preventDefault();
@@ -108,13 +110,18 @@ function createPanel() {
       hidePanel();
     }
   });
-  // If the site isn't reachable, show a short message instead of a blank window.
-  panel.webContents.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
-    if (!isMainFrame || code === -3) return; // -3 = aborted (e.g. a redirect)
+  // If the site isn't reachable, show a short message with retry & localhost options.
+  panel.webContents.on('did-fail-load', (_e, code, desc, _url, isMainFrame) => {
+    if (!isMainFrame || code === -3) return; // -3 = aborted
     const html = `<body style="font:14px Segoe UI,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;color:#333;text-align:center;padding:24px;box-sizing:border-box">
-      <p style="font-size:17px;font-weight:600;margin:0 0 6px">Can’t reach RGK WorkTrack</p>
+      <p style="font-size:17px;font-weight:600;margin:0 0 6px">Can’t reach RGK Myday</p>
       <p style="margin:0 0 16px;color:#777">${APP_URL.host} · ${String(desc).replace(/[<>&]/g, '')}</p>
-      <p style="margin:0;color:#777">Check your internet connection. It will retry when you open My day again.</p></body>`;
+      <p style="margin:0 0 16px;color:#777">Check your internet connection or server address.</p>
+      <div style="display:flex;gap:8px">
+        <button onclick="location.href='${PANEL_URL}'" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer">Retry</button>
+        <button onclick="location.href='http://localhost:5173/widget/my-day'" style="padding:8px 16px;background:#e5e7eb;color:#1f2937;border:none;border-radius:6px;cursor:pointer">Localhost (5173)</button>
+      </div>
+    </body>`;
     panel.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   });
   panel.on('blur', () => {
@@ -174,13 +181,13 @@ function openLoginSetting() {
 function buildTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray.png'));
   tray = new Tray(icon);
-  tray.setToolTip('RGK WorkTrack — My day');
+  tray.setToolTip('RGK Myday — Companion');
   const refresh = () => {
     const startsWithWindows = app.getLoginItemSettings(openLoginSetting()).openAtLogin;
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: 'Open My day', click: showPanel },
-        { label: 'Open RGK WorkTrack in browser', click: () => shell.openExternal(APP_URL.toString()) },
+        { label: 'Open RGK Myday in browser', click: () => shell.openExternal(APP_URL.toString()) },
         { type: 'separator' },
         {
           label: 'Show the tab on screen',
@@ -203,6 +210,15 @@ function buildTray() {
           },
         },
         { type: 'separator' },
+        {
+          label: 'Use Localhost (http://localhost:5173)',
+          click: () => {
+            writeSettings({ appUrl: 'http://localhost:5173' });
+            APP_URL = new URL('http://localhost:5173');
+            PANEL_URL = 'http://localhost:5173/widget/my-day';
+            panel.loadURL(PANEL_URL);
+          },
+        },
         { label: 'Reload', click: () => panel.loadURL(PANEL_URL) },
         { label: 'Quit', click: () => app.quit() },
       ]),

@@ -110,12 +110,15 @@ export async function createLiveBackend(): Promise<Backend> {
   const init = async () => {
     // 1. Try to hydrate from Cloud Firestore first
     try {
-      const [usersSnap, authSnap, deptSnap, dailySnap, weeklySnap] = await Promise.all([
+      const [usersSnap, authSnap, deptSnap, dailySnap, weeklySnap, routineSnap, tasksSnap, projSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'authUsers')),
         getDocs(collection(db, 'departments')),
         getDocs(collection(db, 'dailyReports')),
         getDocs(collection(db, 'weeklyReports')),
+        getDocs(collection(db, 'dailyRoutines')),
+        getDocs(collection(db, 'tasks')),
+        getDocs(collection(db, 'projects')),
       ]);
 
       if (!usersSnap.empty) {
@@ -162,6 +165,30 @@ export async function createLiveBackend(): Promise<Backend> {
         await store.transaction(async (tx) => {
           weeklySnap.forEach((d) => {
             tx.set(COL.weeklyReports, d.id, d.data() as never);
+          });
+        });
+      }
+
+      if (!routineSnap.empty) {
+        await store.transaction(async (tx) => {
+          routineSnap.forEach((d) => {
+            tx.set(COL.dailyRoutines, d.id, d.data() as never);
+          });
+        });
+      }
+
+      if (!tasksSnap.empty) {
+        await store.transaction(async (tx) => {
+          tasksSnap.forEach((d) => {
+            tx.set(COL.tasks, d.id, d.data() as never);
+          });
+        });
+      }
+
+      if (!projSnap.empty) {
+        await store.transaction(async (tx) => {
+          projSnap.forEach((d) => {
+            tx.set(COL.projects, d.id, d.data() as never);
           });
         });
       }
@@ -237,12 +264,26 @@ export async function createLiveBackend(): Promise<Backend> {
     },
     async signIn(emailOrIdentifier, password) {
       const input = emailOrIdentifier.trim();
-      const cleanEmail = input.toLowerCase();
-      let r = await auth.verify(cleanEmail, password);
+      let targetEmail = input.toLowerCase();
 
-      // Resolve identifier if passed employee code ADMIN01 or phone directly
+      // Check if input is employeeCode, officialEmail, or phone number
+      const allUsers = await store.query<UserDoc & { id: string }>(COL.users);
+      const matchedUser = allUsers.find(
+        (u) =>
+          u.employeeCode.toUpperCase() === input.toUpperCase() ||
+          u.phoneNumber === input ||
+          u.authEmail.toLowerCase() === input.toLowerCase() ||
+          (u.officialEmail && u.officialEmail.toLowerCase() === input.toLowerCase())
+      );
+      if (matchedUser) {
+        targetEmail = matchedUser.authEmail.toLowerCase();
+      }
+
+      let r = await auth.verify(targetEmail, password);
+
+      // Fallback for ADMIN01
       if ('error' in r) {
-        if ((input.toUpperCase() === 'ADMIN01' || cleanEmail === 'admin@rgk.com') && password === 'RGK@1090') {
+        if ((input.toUpperCase() === 'ADMIN01' || targetEmail === 'admin@rgk.com') && password === 'RGK@1090') {
           try {
             await auth.setPassword('seed_admin01', 'RGK@1090');
           } catch {
@@ -264,7 +305,7 @@ export async function createLiveBackend(): Promise<Backend> {
               };
               if (u.uid) auth.users.set(u.uid, u);
             });
-            r = await auth.verify(cleanEmail, password);
+            r = await auth.verify(targetEmail, password);
           } catch {
             // Ignore
           }
