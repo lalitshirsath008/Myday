@@ -254,8 +254,17 @@ export const dailyOps = {
       if (input.workDate > today) throw invalid('You cannot report for a future date.');
       const max = maxTasksPerReport(settings);
       if (input.tasks.length > max) throw invalid(`At most ${max} tasks per daily report.`);
-      if (input.submit && input.tasks.length < settings.minTasksForSubmission) {
-        throw invalid(`Add at least ${settings.minTasksForSubmission} task${settings.minTasksForSubmission > 1 ? 's' : ''} before submitting.`);
+      if (input.submit) {
+        const requiredSlots = Math.max(settings.minTasksForSubmission, settings.primaryTaskSlots || 3);
+        if (input.tasks.length < requiredSlots) {
+          throw invalid(`Please fill all ${requiredSlots} priority tasks before submitting.`);
+        }
+        for (let i = 0; i < requiredSlots; i++) {
+          const taskItem = input.tasks[i];
+          if (!taskItem || !taskItem.title.trim()) {
+            throw invalid(`Priority Task ${i + 1} is required before submitting.`, { task: i, field: 'title' });
+          }
+        }
       }
       input.tasks.forEach((t, i) => {
         const issue = taskIssues(t, settings)[0];

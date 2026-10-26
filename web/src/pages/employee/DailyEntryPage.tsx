@@ -157,10 +157,21 @@ function DailyForm({ data, people }: { data: NonNullable<ReturnType<typeof useOp
   const validate = (forSubmit: boolean): TaskInput[] | null => {
     const errs: Errors = {};
     const filled: TaskInput[] = [];
+
+    // When submitting, all 3 priority tasks must be filled!
+    if (forSubmit) {
+      for (let i = 0; i < slots; i++) {
+        const item = tasks[i];
+        if (!item || !item.title.trim()) {
+          errs[i] = { title: `Priority Task ${i + 1} must be filled.` };
+        }
+      }
+    }
+
     tasks.forEach((t, i) => {
       if (isBlank(t)) return;
       const parsed = taskInput.safeParse(toInput(t));
-      const e: Errors[number] = {};
+      const e: Errors[number] = errs[i] ?? {};
       if (!parsed.success) {
         for (const issue of parsed.error.issues) e[issue.path[0] as keyof FormTask] ??= issue.message;
       } else {
@@ -173,11 +184,16 @@ function DailyForm({ data, people }: { data: NonNullable<ReturnType<typeof useOp
     const firstBad = Object.keys(errs).map(Number)[0];
     if (firstBad !== undefined) {
       setActive(firstBad);
-      setFormError(`Check task ${firstBad + 1}`);
+      if (firstBad < slots && (!tasks[firstBad] || !tasks[firstBad].title.trim())) {
+        setFormError(`Please fill all ${slots} priority tasks before submitting (Task ${firstBad + 1} is empty).`);
+      } else {
+        setFormError(`Check task ${firstBad + 1}`);
+      }
       return null;
     }
-    if (forSubmit && filled.length < s.minTasksForSubmission) {
-      setFormError(`Add at least ${s.minTasksForSubmission} task before submitting`);
+    const requiredMin = Math.max(s.minTasksForSubmission, slots);
+    if (forSubmit && filled.length < requiredMin) {
+      setFormError(`Please fill all ${requiredMin} priority tasks before submitting.`);
       return null;
     }
     setFormError(null);
@@ -211,7 +227,8 @@ function DailyForm({ data, people }: { data: NonNullable<ReturnType<typeof useOp
 
   const maxTasks = data.maxTasks;
   const isToday = data.workDate === data.today;
-  const filledCount = tasks.filter((t) => !isBlank(t)).length;
+  const filledPriorityCount = tasks.slice(0, slots).filter((t) => t.title.trim().length > 0).length;
+  const allPriorityFilled = filledPriorityCount >= slots;
   const t = tasks[active] ?? tasks[0]!;
   const submittedLocked = !editable && !!report && report.version > 0 && report.reviewStatus !== 'RETURNED';
 
@@ -334,15 +351,27 @@ function DailyForm({ data, people }: { data: NonNullable<ReturnType<typeof useOp
 
         {editable && (
           <div className="no-print sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:border lg:bottom-4">
-            <p className="mb-2 text-center text-[12px] text-muted-foreground">
-              {filledCount} of {slots} tasks filled{dirty ? ' · unsaved changes' : report ? ` · saved ${fmtDateTime(report.updatedAt).split(',').slice(-1)[0]?.trim()}` : ''}
+            <p className={cn(
+              "mb-2 text-center text-[12px] font-medium transition-colors",
+              allPriorityFilled ? "text-success" : "text-amber-600 dark:text-amber-400"
+            )}>
+              {allPriorityFilled
+                ? `✅ All ${slots} priority tasks filled · Ready to submit`
+                : `⚠️ Fill all ${slots} priority tasks to submit (${filledPriorityCount} of ${slots} filled)`}
             </p>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => doSave(false)} loading={save.isPending && !save.variables?.submit}>
                 <Save /> Save draft
               </Button>
-              <Button type="submit" className="flex-1" loading={save.isPending && !!save.variables?.submit}>
-                <Send /> {report?.reviewStatus === 'RETURNED' ? 'Resubmit report' : 'Submit report'}
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={!allPriorityFilled || (save.isPending && !!save.variables?.submit)}
+                loading={save.isPending && !!save.variables?.submit}
+              >
+                <Send /> {allPriorityFilled
+                  ? (report?.reviewStatus === 'RETURNED' ? 'Resubmit report' : 'Submit report')
+                  : `Fill all ${slots} priority tasks (${filledPriorityCount}/${slots})`}
               </Button>
             </div>
           </div>

@@ -25,7 +25,7 @@ export function defaultSettings(nowIso: string): SystemSettings {
     weeklyDeadlineTime: '18:00',
     reminderTime: '18:00',
     primaryTaskSlots: 3,
-    minTasksForSubmission: 1,
+    minTasksForSubmission: 3,
     allowAdditionalTasks: false,
     maxAdditionalTasks: 2,
     allowOvernightTasks: false,
