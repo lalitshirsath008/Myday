@@ -54,7 +54,7 @@ export function PasswordPicker({ value, onChange, error, label = 'Password' }: {
 /** After creating an account: the sign-in details the admin just chose, ready to share. */
 function AccountReadyDialog({ details, onClose }: { details: { fullName: string; code: string; phone: string; password: string; mustChange: boolean }; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const text = `RGK WorkTrack sign-in\nEmployee code: ${details.code}\nMobile: ${details.phone}\nPassword: ${details.password}`;
+  const text = `RGK Myday sign-in\nEmployee code: ${details.code}\nMobile: ${details.phone}\nPassword: ${details.password}`;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`${details.fullName} can sign in now`} description="The account is active. Share these details with the employee in person or on official chat." footer={<Button onClick={onClose}>Done</Button>}>
       <div className="space-y-2 rounded-2xl bg-muted/60 p-4 text-sm">

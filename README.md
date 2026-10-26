@@ -1,4 +1,4 @@
-# RGK WorkTrack
+# RGK Myday
 
 Employee Productivity & Reporting Management System for **RGK Group of Industries**. It replaces the Excel-based daily task sheets with:
 

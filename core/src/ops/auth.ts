@@ -129,7 +129,7 @@ export const authOps = {
           notify(tx, ctx, settings, {
             userId: user.id,
             type: 'ACCOUNT_ACTIVATED',
-            title: 'Welcome to RGK WorkTrack',
+            title: 'Welcome to RGK Myday',
             body: 'Your account is active. You can now submit your daily reports.',
             link: '/',
             key: 'activated',

@@ -23,7 +23,7 @@ export function Logo({ compact }: { compact?: boolean }) {
       </span>
       {!compact && (
         <span className="leading-tight">
-          <span className="block text-[15px] font-semibold tracking-tight">RGK WorkTrack</span>
+          <span className="block text-[15px] font-semibold tracking-tight">RGK Myday</span>
           <span className="block text-[11px] text-muted-foreground">RGK Group of Industries</span>
         </span>
       )}

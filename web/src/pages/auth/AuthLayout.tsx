@@ -54,7 +54,7 @@ function AuthHero() {
           </svg>
         </span>
         <span className="leading-tight">
-          <span className="block text-[16px] font-bold tracking-tight">RGK WorkTrack</span>
+          <span className="block text-[16px] font-bold tracking-tight">RGK Myday</span>
           <span className="block text-[11px] font-medium text-white/75">RGK Group of Industries</span>
         </span>
       </div>

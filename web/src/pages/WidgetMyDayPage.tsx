@@ -52,7 +52,7 @@ export function WidgetMyDayPage() {
           <ListChecks className="size-7" aria-hidden />
         </span>
         <p className="text-[17px] font-semibold">My day</p>
-        <p className="text-[13px] text-muted-foreground">Sign in to RGK WorkTrack to plan your day.</p>
+        <p className="text-[13px] text-muted-foreground">Sign in to RGK Myday to plan your day.</p>
         <Button asChild>
           <Link to="/login" state={{ from: '/widget/my-day' }}>
             <LogIn /> Sign in

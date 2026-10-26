@@ -21,7 +21,7 @@ const queryClient = new QueryClient({
 function SetupRequired({ reason }: { reason: string }) {
   return (
     <main className="mx-auto max-w-2xl px-4 py-16">
-      <h1 className="text-2xl font-semibold">RGK WorkTrack — setup required</h1>
+      <h1 className="text-2xl font-semibold">RGK Myday — setup required</h1>
       <p className="mt-3 text-muted-foreground">{reason}</p>
       <ol className="mt-6 list-decimal space-y-2 pl-5 text-sm">
         <li>Create a Firebase project (Blaze plan, for Cloud Functions) and a Web app in it.</li>
@@ -46,7 +46,7 @@ function Root() {
       .catch((e: Error) => setFailed(e.message));
   }, []);
   if (failed) return <SetupRequired reason={`The backend could not be initialised: ${failed}`} />;
-  if (!init) return <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground" role="status">Loading RGK WorkTrack…</div>;
+  if (!init) return <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground" role="status">Loading RGK Myday…</div>;
   if (init.status === 'setup-required') return <SetupRequired reason={init.reason} />;
   return <AppWithRouter />;
 }
