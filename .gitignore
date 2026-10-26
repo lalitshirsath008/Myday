@@ -7,7 +7,8 @@ coverage/
 .env.*.local
 *.log
 .firebase/
-web/public/downloads/
+web/public/downloads/*.exe
+!web/public/downloads/desktop.json
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*

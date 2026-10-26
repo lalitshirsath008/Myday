@@ -1,5 +1,5 @@
 import { ROLE_LABELS } from '@rgk/core';
-import { ChevronsLeft, ChevronsRight, KeyRound, LogOut, Moon, Search, Sun, UserCircle } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, KeyRound, LogOut, Monitor, Moon, Search, Sun, UserCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
@@ -165,6 +165,7 @@ export function AppShell() {
                 }
                 items={[
                   { label: <><UserCircle /> Profile</>, onSelect: () => navigate('/profile') },
+                  { label: <><Monitor /> Download Windows App</>, onSelect: () => window.open('/downloads/RGK-WorkTrack-Setup.exe', '_blank') },
                   { label: <><KeyRound /> Change password</>, onSelect: () => navigate('/profile#password') },
                   'separator',
                   { label: <><LogOut /> Sign out</>, onSelect: () => void signOut().then(() => navigate('/login')) },
