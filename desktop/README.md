@@ -10,11 +10,20 @@ so the list, the sign-in and the security rules are the website's. The desktop a
   move the tab back to the middle, Start with Windows, Reload, Quit.
 - Employees and managers only. Super Admin sees a short notice.
 
-## Which website it opens
+## What it shows
 
-`config.json` → `appUrl`. Default `http://localhost:5173` (the dev server).
-After the live deployment, change it to `https://task-8861a.web.app` before building the installer.
-For a one-off run you can also set the `RGK_APP_URL` environment variable.
+1. **Today's 3 priority tasks** from the daily report: title, status, time and progress, plus a link to fill or update them.
+   The full page opens in the normal browser. The panel only shows these tasks; they are edited on the Today's tasks page.
+2. **My own tasks**: the private routine list. Add, tick, repeat daily, delete.
+
+## Which website it opens (Firebase link)
+
+The panel is the WorkTrack website itself, so it uses whatever the website uses. On the live site that is
+Firebase: the same sign-in (Firebase Auth) and the same data (Firestore through the `api` Cloud Function). A task added on the
+desktop shows on the website, and the other way round.
+
+- **Installer:** `config.json` → `appUrl` = `https://task-8861a.web.app` (the Firebase Hosting site).
+- **`npm run desktop`** (from source) uses `http://localhost:5173`, the dev server, unless `RGK_APP_URL` is set.
 
 In **demo mode**, the desktop app keeps its own demo data and signs out when it closes,
 just like a separate browser. With live Firebase, everything is shared, and you stay signed in.
