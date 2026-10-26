@@ -1,0 +1,50 @@
+{
+  "name": "rgk-worktrack-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "RGK WorkTrack desktop companion \u2014 the My day tab on the edge of your screen",
+  "author": "RGK Group of Industries",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "node start.cjs",
+    "dist": "electron-builder --win nsis",
+    "postdist": "node publish.cjs"
+  },
+  "devDependencies": {
+    "electron": "^44.9.3",
+    "electron-builder": "^26.17.0"
+  },
+  "build": {
+    "appId": "net.rgkgroup.worktrack.desktop",
+    "productName": "RGK WorkTrack",
+    "files": [
+      "main.cjs",
+      "tab.html",
+      "tab-preload.cjs",
+      "panel-preload.cjs",
+      "config.json",
+      "assets/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "RGK WorkTrack",
+      "artifactName": "RGK-WorkTrack-Setup-${version}.${ext}"
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "onlyLoadAppFromAsar": true,
+      "enableEmbeddedAsarIntegrityValidation": true
+    }
+  }
+}

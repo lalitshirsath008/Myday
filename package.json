@@ -1,0 +1,28 @@
+{
+  "name": "rgk-worktrack",
+  "private": true,
+  "version": "1.0.0",
+  "description": "RGK WorkTrack — Employee Productivity & Reporting Management System (RGK Group of Industries)",
+  "workspaces": [
+    "core",
+    "functions",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w functions && npm run build -w web",
+    "typecheck": "npm run typecheck -w core && npm run typecheck -w functions && npm run typecheck -w web",
+    "lint": "npm run lint -w web",
+    "test": "npm run test -w core",
+    "test:rules": "npm run test:rules -w functions",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "seed:departments": "npm run seed:departments -w functions",
+    "seed:emulator": "npm run seed:emulator -w functions",
+    "desktop": "npm start --prefix desktop"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "~5.9",
+    "vitest": "^5.0.5"
+  }
+}

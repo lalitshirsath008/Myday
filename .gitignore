@@ -1,0 +1,17 @@
+node_modules/
+dist/
+lib/
+coverage/
+.env
+.env.local
+.env.*.local
+*.log
+.firebase/
+web/public/downloads/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.firebaserc
+test-results/
+playwright-report/
+serviceAccountKey*.json

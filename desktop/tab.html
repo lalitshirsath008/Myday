@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <title>My day</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        font-family: 'Poppins', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+      }
+      button {
+        all: unset;
+        box-sizing: border-box;
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border-radius: 16px 0 0 16px;
+        background: #c8530a;
+        color: #fff;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      button:hover {
+        background: #b34a09;
+      }
+      button:active {
+        background: #a33e05;
+      }
+      svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .label {
+        writing-mode: vertical-rl;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+      .count {
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.22);
+        padding: 0 4px;
+        font-size: 10px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .count:empty {
+        display: none;
+      }
+      .count.all {
+        background: #1f9d55;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="tab" type="button" aria-label="My day" title="My day — click to open, drag to move">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m3 17 2 2 4-4" />
+        <path d="m3 7 2 2 4-4" />
+        <path d="M13 6h8" />
+        <path d="M13 12h8" />
+        <path d="M13 18h8" />
+      </svg>
+      <span class="label">My day</span>
+      <span class="count" id="count"></span>
+    </button>
+    <script>
+      const tab = document.getElementById('tab');
+      const count = document.getElementById('count');
+      window.rgkTab.onCount((done, total) => {
+        count.textContent = total ? `${done}/${total}` : '';
+        count.classList.toggle('all', total > 0 && done === total);
+        tab.setAttribute('aria-label', total ? `My day: ${done} of ${total} done` : 'My day');
+      });
+
+      // Click opens the panel; dragging up or down moves the tab.
+      let down = null;
+      tab.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        down = { y: e.screenY, dragging: false };
+        tab.setPointerCapture(e.pointerId);
+      });
+      tab.addEventListener('pointermove', (e) => {
+        if (!down) return;
+        if (!down.dragging && Math.abs(e.screenY - down.y) > 4) {
+          down.dragging = true;
+          window.rgkTab.dragStart();
+        }
+        if (down.dragging) window.rgkTab.dragMove();
+      });
+      tab.addEventListener('pointerup', () => {
+        if (!down) return;
+        if (down.dragging) window.rgkTab.dragEnd();
+        else window.rgkTab.toggle();
+        down = null;
+      });
+      tab.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') window.rgkTab.toggle();
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "indexes": [
+    { "collectionGroup": "dailyReports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "employeeId", "order": "ASCENDING" }, { "fieldPath": "workDate", "order": "ASCENDING" }] },
+    { "collectionGroup": "dailyReports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "departmentId", "order": "ASCENDING" }, { "fieldPath": "workDate", "order": "ASCENDING" }] },
+    { "collectionGroup": "dailyReports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "employeeId", "order": "ASCENDING" }, { "fieldPath": "awaitingReview", "order": "ASCENDING" }] },
+    { "collectionGroup": "weeklyReports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "employeeId", "order": "ASCENDING" }, { "fieldPath": "periodStart", "order": "ASCENDING" }] },
+    { "collectionGroup": "weeklyReports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "employeeId", "order": "ASCENDING" }, { "fieldPath": "periodStart", "order": "DESCENDING" }] },
+    { "collectionGroup": "weeklyReports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "departmentId", "order": "ASCENDING" }, { "fieldPath": "periodStart", "order": "ASCENDING" }] },
+    { "collectionGroup": "weeklyReports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "employeeId", "order": "ASCENDING" }, { "fieldPath": "awaitingReview", "order": "ASCENDING" }] },
+    { "collectionGroup": "tasks", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "employeeId", "order": "ASCENDING" }, { "fieldPath": "workDate", "order": "DESCENDING" }] },
+    { "collectionGroup": "tasks", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "projectId", "order": "ASCENDING" }, { "fieldPath": "workDate", "order": "DESCENDING" }] },
+    { "collectionGroup": "reportReviews", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "reportId", "order": "ASCENDING" }, { "fieldPath": "reportType", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "ASCENDING" }] },
+    { "collectionGroup": "reportVersions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "reportId", "order": "ASCENDING" }, { "fieldPath": "reportType", "order": "ASCENDING" }, { "fieldPath": "version", "order": "ASCENDING" }] },
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "read", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "entityId", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
+    { "collectionGroup": "dailyRoutines", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "date", "order": "DESCENDING" }] },
+    { "collectionGroup": "users", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "role", "order": "ASCENDING" }, { "fieldPath": "accountStatus", "order": "ASCENDING" }] },
+    { "collectionGroup": "users", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "departmentId", "order": "ASCENDING" }, { "fieldPath": "accountStatus", "order": "ASCENDING" }] },
+    { "collectionGroup": "registrationRequests", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "employeeCode", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
+    { "collectionGroup": "registrationRequests", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
+  ],
+  "fieldOverrides": []
+}
