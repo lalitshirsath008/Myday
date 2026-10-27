@@ -4,7 +4,7 @@
   "buildCommand": "npm run build -w web",
   "outputDirectory": "web/dist",
   "rewrites": [
-    { "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {

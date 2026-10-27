@@ -80,126 +80,24 @@ export async function createLiveBackend(): Promise<Backend> {
   let isRemoteSync = false;
   const liveBus = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('rgk_live_bus') : null;
 
-  // Vercel Serverless SQL Database & Failover Backup
-  const backupToSql = async (changes: StoreChange[], needsFirebaseSync = false) => {
-    try {
-      await fetch('/api/sql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'sync_delta',
-          changes,
-          authUsers: auth.snapshot(),
-          needsFirebaseSync,
-        }),
-      });
-    } catch {
-      // Offline / background non-blocking
-    }
-  };
-
-  // Automated Reconciler: pushes any SQL queued changes back to Firestore once available
-  const reconcileSqlToFirestore = async () => {
-    try {
-      const res = await fetch('/api/sql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get_pending_firebase' }),
-      });
-      if (!res.ok) return;
-      const { pending } = (await res.json()) as {
-        pending?: Array<{ id: string; col: string; docId: string; doc: any | null }>;
-      };
-      if (!pending || pending.length === 0) return;
-
-      const syncedIds: string[] = [];
-      for (const item of pending) {
-        try {
-          const ref = doc(db, item.col, item.docId);
-          if (item.doc === null) {
-            await deleteDoc(ref);
-          } else {
-            await setDoc(ref, item.doc);
-          }
-          syncedIds.push(item.id);
-        } catch {
-          // If Firestore is still quota-exhausted or offline, pause and retry on next tick
-          break;
-        }
-      }
-
-      if (syncedIds.length > 0) {
-        await fetch('/api/sql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'mark_synced', syncedIds }),
-        });
-      }
-
-      // Pull latest notifications from Vercel SQL Database (failover multi-device sync)
-      try {
-        const sqlRes = await fetch('/api/sql');
-        if (sqlRes.ok) {
-          const sqlData = await sqlRes.json();
-          const sqlNotes = sqlData?.tables?.notifications;
-          if (sqlNotes) {
-            const freshIncoming: any[] = [];
-            isRemoteSync = true;
-            await store
-              .transaction(async (tx) => {
-                for (const [id, n] of Object.entries(sqlNotes as Record<string, any>)) {
-                  const current = await tx.get(COL.notifications, id);
-                  if (!current) {
-                    tx.set(COL.notifications, id, n as never);
-                    freshIncoming.push({ ...n, id });
-                  }
-                }
-              })
-              .finally(() => {
-                isRemoteSync = false;
-                if (freshIncoming.length > 0) {
-                  window.dispatchEvent(
-                    new CustomEvent('rgk:notifications-synced', { detail: { items: freshIncoming } })
-                  );
-                }
-              });
-          }
-        }
-      } catch {
-        // SQL notification pull error non-fatal
-      }
-    } catch {
-      // Background reconciler non-fatal
-    }
-  };
-
   const syncChangesToFirestore = async (changes: StoreChange[]) => {
-    let hadFirestoreError = false;
     for (const ch of changes) {
       if (ch.col === 'uniqueKeys' || ch.col === 'counters') continue;
       const ref = doc(db, ch.col, ch.id);
       if (ch.doc === null) {
-        deleteDoc(ref).catch(() => {
-          hadFirestoreError = true;
-        });
+        deleteDoc(ref).catch(() => {});
       } else {
         await setDoc(ref, ch.doc).catch((err) => {
-          hadFirestoreError = true;
           console.warn(`Firestore sync [${ch.col}/${ch.id}]:`, err?.message || err);
         });
       }
       if (ch.col === 'users') {
         const u = auth.snapshot().find((a) => a.uid === ch.id);
         if (u) {
-          setDoc(doc(db, 'authUsers', u.uid), u).catch(() => {
-            hadFirestoreError = true;
-          });
+          setDoc(doc(db, 'authUsers', u.uid), u).catch(() => {});
         }
       }
     }
-
-    // Always mirror to Vercel SQL Database. If Firestore rejected (quota exceeded), flag for auto-reconciliation
-    void backupToSql(changes, hadFirestoreError);
   };
 
   const persist = (changes?: StoreChange[]) => {
@@ -375,30 +273,7 @@ export async function createLiveBackend(): Promise<Backend> {
         });
       });
     } catch (err) {
-      console.warn('Hydration from Cloud Firestore notice (offline/quota):', err);
-      // Failover: Hydrate directly from Vercel SQL Database!
-      try {
-        const sqlRes = await fetch('/api/sql');
-        if (sqlRes.ok) {
-          const sqlData = await sqlRes.json();
-          if (sqlData?.tables) {
-            await store.transaction(async (tx) => {
-              for (const [col, docs] of Object.entries(sqlData.tables)) {
-                for (const [id, docData] of Object.entries(docs as Record<string, any>)) {
-                  tx.set(col as any, id, docData);
-                }
-              }
-            });
-          }
-          if (sqlData?.authUsers) {
-            for (const u of Object.values(sqlData.authUsers as Record<string, any>)) {
-              if (u.uid) auth.users.set(u.uid, u);
-            }
-          }
-        }
-      } catch {
-        // Fallback to local storage if offline
-      }
+      console.warn('Hydration from Cloud Firestore notice:', err);
     }
 
     // 2. Ensure baseline ADMIN01 + 23 departments exist
@@ -541,9 +416,6 @@ export async function createLiveBackend(): Promise<Backend> {
 
   await init();
 
-  // Periodic automatic reconciliation: Sync SQL pending data to Cloud Firestore every 30 seconds
-  setInterval(() => void reconcileSqlToFirestore(), 30_000);
-  void reconcileSqlToFirestore();
 
   const listeners = new Set<(s: Session | null) => void>();
 
@@ -612,36 +484,6 @@ export async function createLiveBackend(): Promise<Backend> {
           // Firestore lookup failed
         }
 
-        // 2. Fallback to Vercel SQL database if user not found via Firestore
-        if (!matchedUser) {
-          try {
-            const sqlRes = await fetch('/api/sql');
-            if (sqlRes.ok) {
-              const sqlData = await sqlRes.json();
-              if (sqlData?.tables?.users) {
-                await store.transaction(async (tx) => {
-                  for (const [id, u] of Object.entries(sqlData.tables.users as Record<string, any>)) {
-                    tx.set(COL.users, id, u as never);
-                    if (u.employeeCode) tx.set(COL.uniqueKeys, codeKey(u.employeeCode), { id: codeKey(u.employeeCode), ownerId: id, createdAt: '' });
-                    if (u.phoneNumber) tx.set(COL.uniqueKeys, phoneKey(u.phoneNumber), { id: phoneKey(u.phoneNumber), ownerId: id, createdAt: '' });
-                    if (u.authEmail) tx.set(COL.uniqueKeys, `email_${u.authEmail.toLowerCase()}`, { id: `email_${u.authEmail.toLowerCase()}`, ownerId: id, createdAt: '' });
-                    if (u.officialEmail) tx.set(COL.uniqueKeys, `email_${u.officialEmail.toLowerCase()}`, { id: `email_${u.officialEmail.toLowerCase()}`, ownerId: id, createdAt: '' });
-                  }
-                });
-                allUsers = await store.query<UserDoc & { id: string }>(COL.users);
-                matchedUser = allUsers.find(
-                  (u) =>
-                    u.employeeCode?.toUpperCase() === input.toUpperCase() ||
-                    u.phoneNumber === input ||
-                    u.authEmail?.toLowerCase() === input.toLowerCase() ||
-                    (u.officialEmail && u.officialEmail.toLowerCase() === input.toLowerCase())
-                );
-              }
-            }
-          } catch {
-            // Ignore
-          }
-        }
       }
 
       if (matchedUser) {
@@ -671,23 +513,6 @@ export async function createLiveBackend(): Promise<Backend> {
         }
       }
 
-      // Fallback: Verify against Vercel SQL auth credentials if Firestore verify fails
-      if ('error' in r) {
-        try {
-          const sqlRes = await fetch('/api/sql');
-          if (sqlRes.ok) {
-            const sqlData = await sqlRes.json();
-            if (sqlData?.authUsers) {
-              for (const u of Object.values(sqlData.authUsers as Record<string, any>)) {
-                if (u.uid) auth.users.set(u.uid, u);
-              }
-              r = await auth.verify(targetEmail, password);
-            }
-          }
-        } catch {
-          // Ignore
-        }
-      }
 
       if ('error' in r) {
         throw new AuthFailure(r.error === 'auth/user-disabled' ? 'user-disabled' : 'invalid-credential');
@@ -717,23 +542,7 @@ export async function createLiveBackend(): Promise<Backend> {
               });
             });
           } catch {
-            // Fallback: If Firestore read fails (e.g. quota limit), fetch from Vercel SQL
-            try {
-              const sqlRes = await fetch('/api/sql');
-              if (sqlRes.ok) {
-                const sqlData = await sqlRes.json();
-                const sqlNotes = sqlData?.tables?.notifications;
-                if (sqlNotes) {
-                  await store.transaction(async (tx) => {
-                    for (const [id, n] of Object.entries(sqlNotes as Record<string, any>)) {
-                      tx.set(COL.notifications, id, n as never);
-                    }
-                  });
-                }
-              }
-            } catch {
-              // Ignore
-            }
+            // Firestore read error non-fatal
           }
         }
         const p = payload as { workDate?: string } | undefined;
