@@ -26,16 +26,15 @@ export interface FirebaseEnv {
 }
 
 export function readFirebaseEnv(): FirebaseEnv {
-  const env = import.meta.env;
   return {
-    apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyA9aMBFpGQpL5rpAunqIWUD7fSjXdu8h8Q',
-    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'rgk-myday-app.firebaseapp.com',
-    projectId: env.VITE_FIREBASE_PROJECT_ID || 'rgk-myday-app',
-    storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || 'rgk-myday-app.firebasestorage.app',
-    messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '387946926063',
-    appId: env.VITE_FIREBASE_APP_ID || '1:387946926063:web:29df7e60dea199ad84b01a',
-    region: env.VITE_FIREBASE_FUNCTIONS_REGION || 'asia-south1',
-    useEmulators: env.VITE_USE_EMULATORS === 'true',
+    apiKey: 'AIzaSyA9aMBFpGQpL5rpAunqIWUD7fSjXdu8h8Q',
+    authDomain: 'rgk-myday-app.firebaseapp.com',
+    projectId: 'rgk-myday-app',
+    storageBucket: 'rgk-myday-app.firebasestorage.app',
+    messagingSenderId: '387946926063',
+    appId: '1:387946926063:web:29df7e60dea199ad84b01a',
+    region: 'asia-south1',
+    useEmulators: false,
   };
 }
 
