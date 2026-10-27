@@ -18,6 +18,7 @@ import {
   phoneKey,
   RGK_DEPARTMENTS,
   seedProductionData,
+  type Doc,
   type StoreChange,
   type UserDoc,
 } from '@rgk/core';
@@ -35,7 +36,7 @@ import {
 import { ApiError, AuthFailure, type Backend, type Session } from './types';
 import { readFirebaseEnv } from './firebase';
 
-const DATA_KEY = 'rgk_worktrack_live_db_v1';
+const DATA_KEY = 'rgk_worktrack_live_db_v2';
 const SESSION_KEY = 'rgk_worktrack_live_session_v1';
 
 interface Persisted {
@@ -45,6 +46,11 @@ interface Persisted {
 
 function loadLocal(): Persisted | null {
   try {
+    try {
+      localStorage.removeItem('rgk_worktrack_live_db_v1');
+    } catch {
+      // non-fatal
+    }
     const raw = localStorage.getItem(DATA_KEY);
     return raw ? (JSON.parse(raw) as Persisted) : null;
   } catch {
@@ -289,18 +295,27 @@ export async function createLiveBackend(): Promise<Backend> {
         });
       }
 
-      if (!dailySnap.empty) {
-        await store.transaction(async (tx) => {
-          dailySnap.forEach((d) => {
-            const rep = d.data() as { employeeId?: string; workDate?: string; createdAt?: string };
-            tx.set(COL.dailyReports, d.id, rep as never);
-            if (rep.employeeId && rep.workDate) {
-              const k = dailyKey(rep.employeeId, rep.workDate);
-              tx.set(COL.uniqueKeys, k, { id: k, ownerId: d.id, createdAt: rep.createdAt || '' });
+      // Reconcile dailyReports with Cloud Firestore
+      const remoteDailyIds = new Set(dailySnap.docs.map((d) => d.id));
+      const localDailies = await store.query<Doc & { id: string }>(COL.dailyReports);
+      await store.transaction(async (tx) => {
+        for (const local of localDailies) {
+          if (!remoteDailyIds.has(local.id)) {
+            tx.delete(COL.dailyReports, local.id);
+            if ((local as any).employeeId && (local as any).workDate) {
+              tx.delete(COL.uniqueKeys, dailyKey((local as any).employeeId, (local as any).workDate));
             }
-          });
+          }
+        }
+        dailySnap.forEach((d) => {
+          const rep = d.data() as { employeeId?: string; workDate?: string; createdAt?: string };
+          tx.set(COL.dailyReports, d.id, rep as never);
+          if (rep.employeeId && rep.workDate) {
+            const k = dailyKey(rep.employeeId, rep.workDate);
+            tx.set(COL.uniqueKeys, k, { id: k, ownerId: d.id, createdAt: rep.createdAt || '' });
+          }
         });
-      }
+      });
 
       if (!weeklySnap.empty) {
         await store.transaction(async (tx) => {
@@ -310,21 +325,33 @@ export async function createLiveBackend(): Promise<Backend> {
         });
       }
 
-      if (!routineSnap.empty) {
-        await store.transaction(async (tx) => {
-          routineSnap.forEach((d) => {
-            tx.set(COL.dailyRoutines, d.id, d.data() as never);
-          });
+      // Reconcile dailyRoutines with Cloud Firestore
+      const remoteRoutineIds = new Set(routineSnap.docs.map((d) => d.id));
+      const localRoutines = await store.query<Doc & { id: string }>(COL.dailyRoutines);
+      await store.transaction(async (tx) => {
+        for (const r of localRoutines) {
+          if (!remoteRoutineIds.has(r.id)) {
+            tx.delete(COL.dailyRoutines, r.id);
+          }
+        }
+        routineSnap.forEach((d) => {
+          tx.set(COL.dailyRoutines, d.id, d.data() as never);
         });
-      }
+      });
 
-      if (!tasksSnap.empty) {
-        await store.transaction(async (tx) => {
-          tasksSnap.forEach((d) => {
-            tx.set(COL.tasks, d.id, d.data() as never);
-          });
+      // Reconcile tasks with Cloud Firestore
+      const remoteTaskIds = new Set(tasksSnap.docs.map((d) => d.id));
+      const localTasks = await store.query<Doc & { id: string }>(COL.tasks);
+      await store.transaction(async (tx) => {
+        for (const t of localTasks) {
+          if (!remoteTaskIds.has(t.id)) {
+            tx.delete(COL.tasks, t.id);
+          }
+        }
+        tasksSnap.forEach((d) => {
+          tx.set(COL.tasks, d.id, d.data() as never);
         });
-      }
+      });
 
       if (!projSnap.empty) {
         await store.transaction(async (tx) => {
@@ -334,13 +361,19 @@ export async function createLiveBackend(): Promise<Backend> {
         });
       }
 
-      if (!notesSnap.empty) {
-        await store.transaction(async (tx) => {
-          notesSnap.forEach((d) => {
-            tx.set(COL.notifications, d.id, d.data() as never);
-          });
+      // Reconcile notifications with Cloud Firestore
+      const remoteNoteIds = new Set(notesSnap.docs.map((d) => d.id));
+      const localNotes = await store.query<Doc & { id: string }>(COL.notifications);
+      await store.transaction(async (tx) => {
+        for (const n of localNotes) {
+          if (!remoteNoteIds.has(n.id)) {
+            tx.delete(COL.notifications, n.id);
+          }
+        }
+        notesSnap.forEach((d) => {
+          tx.set(COL.notifications, d.id, d.data() as never);
         });
-      }
+      });
     } catch (err) {
       console.warn('Hydration from Cloud Firestore notice (offline/quota):', err);
       // Failover: Hydrate directly from Vercel SQL Database!
