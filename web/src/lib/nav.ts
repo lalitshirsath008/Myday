@@ -130,8 +130,13 @@ export function navFor(role: Role, isReporter: boolean): NavSection[] {
   const sections: NavSection[] = [];
   if (role === 'SUPER_ADMIN') sections.push(...adminSections, { ...management, title: 'Company insights' });
   if (role === 'MANAGEMENT') sections.push(management);
-  if (role === 'REPORTING_MANAGER') sections.push(manager);
-  if (isReporter) sections.push(role === 'EMPLOYEE' ? myWork : { ...myWork, items: myWork.items.filter((i) => i.to !== '/dashboard') });
+  if (role === 'REPORTING_MANAGER') {
+    // For Reporting Manager: My work is 1st (on top), My team is 2nd
+    if (isReporter) sections.push({ ...myWork, items: myWork.items.filter((i) => i.to !== '/dashboard') });
+    sections.push(manager);
+  } else if (isReporter) {
+    sections.push(role === 'EMPLOYEE' ? myWork : { ...myWork, items: myWork.items.filter((i) => i.to !== '/dashboard') });
+  }
   sections.push(account);
   return sections;
 }
@@ -145,7 +150,7 @@ export function bottomNavFor(role: Role): NavItem[] {
     case 'MANAGEMENT':
       return [{ to: '/management', label: 'Home', icon: Home, end: true }, { to: '/directory', label: 'People', icon: Users }, { to: '/projects', label: 'Projects', icon: FolderKanban }, profile];
     case 'REPORTING_MANAGER':
-      return [{ to: '/manager', label: 'Team', icon: Home, end: true }, { to: '/reviews/pending', label: 'Review', icon: ClipboardCheck }, { to: '/daily/today', label: 'My Tasks', icon: ListTodo }, profile];
+      return [{ to: '/daily/today', label: 'My Tasks', icon: ListTodo }, { to: '/manager', label: 'Team', icon: Home, end: true }, { to: '/reviews/pending', label: 'Review', icon: ClipboardCheck }, profile];
     default:
       return [{ to: '/dashboard', label: 'Home', icon: Home }, { to: '/daily/today', label: 'My Tasks', icon: ListTodo }, { to: '/reports/daily', label: 'Reports', icon: FileText, match: ['/reports'] }, profile];
   }
