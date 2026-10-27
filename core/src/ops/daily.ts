@@ -128,7 +128,24 @@ export async function validateReferences(ctx: AuthedCtx, tasks: TaskInput[], pre
 
 async function findReportId(ctx: AuthedCtx, employeeId: string, workDate: DateStr): Promise<string | null> {
   const key = await ctx.store.get<UniqueKeyDoc & { id: string }>(COL.uniqueKeys, dailyKey(employeeId, workDate));
-  return key?.ownerId ?? null;
+  if (key?.ownerId) return key.ownerId;
+  const match = await ctx.store.query<DailyReportDoc & { id: string }>(COL.dailyReports, {
+    where: [['employeeId', '==', employeeId], ['workDate', '==', workDate]],
+    limit: 1,
+  });
+  const found = match[0];
+  if (found) {
+    const k = dailyKey(employeeId, workDate);
+    try {
+      await ctx.store.transaction(async (tx) => {
+        tx.set(COL.uniqueKeys, k, { id: k, ownerId: found.id, createdAt: found.createdAt || '' });
+      });
+    } catch {
+      // Non-fatal
+    }
+    return found.id;
+  }
+  return null;
 }
 
 export function summarizeDaily(r: DailyReportDoc) {

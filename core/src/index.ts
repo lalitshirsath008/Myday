@@ -12,7 +12,7 @@ export * from './authAdmin';
 export { RGK_DEPARTMENTS } from './departments';
 export { dispatch, ops, isPublicOp, type OpName, type OpInput, type OpOutput, type Ops } from './ops';
 export type { Ctx } from './ops/context';
-export { taskIssues, type DailySummaryRow } from './ops/daily';
+export { taskIssues, type DailySummaryRow, dailyKey } from './ops/daily';
 export { type WeeklySummaryRow, EMPTY_NARRATIVE } from './ops/weekly';
 export { runReminders } from './ops/misc';
 export type { RoutineItem } from './ops/routine';

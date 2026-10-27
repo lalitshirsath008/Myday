@@ -10,6 +10,7 @@ import {
   AppError,
   COL,
   codeKey,
+  dailyKey,
   dispatch,
   INITIAL_ADMIN_PASSWORD,
   MemoryAuth,
@@ -26,6 +27,7 @@ import {
   setDoc,
   getDocs,
   collection,
+  onSnapshot,
   type Firestore,
 } from 'firebase/firestore';
 import { ApiError, AuthFailure, type Backend, type Session } from './types';
@@ -79,6 +81,10 @@ export async function createLiveBackend(): Promise<Backend> {
         'systemSettings',
         'projects',
         'workCalendar',
+        'dailyRoutines',
+        'notifications',
+        'reportReviews',
+        'reportVersions',
       ];
       for (const colName of collectionsToSync) {
         const colDocs = snap[colName];
@@ -176,7 +182,12 @@ export async function createLiveBackend(): Promise<Backend> {
       if (!dailySnap.empty) {
         await store.transaction(async (tx) => {
           dailySnap.forEach((d) => {
-            tx.set(COL.dailyReports, d.id, d.data() as never);
+            const rep = d.data() as { employeeId?: string; workDate?: string; createdAt?: string };
+            tx.set(COL.dailyReports, d.id, rep as never);
+            if (rep.employeeId && rep.workDate) {
+              const k = dailyKey(rep.employeeId, rep.workDate);
+              tx.set(COL.uniqueKeys, k, { id: k, ownerId: d.id, createdAt: rep.createdAt || '' });
+            }
           });
         });
       }
@@ -246,7 +257,43 @@ export async function createLiveBackend(): Promise<Backend> {
           });
         }
       }
-      persist();
+      // Real-time live Firestore synchronization for multi-device sync (Web <-> Desktop)
+      try {
+        onSnapshot(collection(db, 'dailyReports'), (snap) => {
+          if (!snap.empty) {
+            void store.transaction(async (tx) => {
+              snap.docChanges().forEach((c) => {
+                if (c.type === 'removed') {
+                  tx.delete(COL.dailyReports, c.doc.id);
+                } else {
+                  const rep = c.doc.data() as { employeeId?: string; workDate?: string; createdAt?: string };
+                  tx.set(COL.dailyReports, c.doc.id, rep as never);
+                  if (rep.employeeId && rep.workDate) {
+                    const k = dailyKey(rep.employeeId, rep.workDate);
+                    tx.set(COL.uniqueKeys, k, { id: k, ownerId: c.doc.id, createdAt: rep.createdAt || '' });
+                  }
+                }
+              });
+            });
+          }
+        });
+
+        onSnapshot(collection(db, 'dailyRoutines'), (snap) => {
+          if (!snap.empty) {
+            void store.transaction(async (tx) => {
+              snap.docChanges().forEach((c) => {
+                if (c.type === 'removed') {
+                  tx.delete(COL.dailyRoutines, c.doc.id);
+                } else {
+                  tx.set(COL.dailyRoutines, c.doc.id, c.doc.data() as never);
+                }
+              });
+            });
+          }
+        });
+      } catch (err) {
+        console.warn('Real-time listener setup non-fatal:', err);
+      }
     }
     store.onChange = persist;
   };
@@ -364,6 +411,31 @@ export async function createLiveBackend(): Promise<Backend> {
     async call(op, payload) {
       const session = readSession();
       const actor = session ? await store.get<UserDoc & { id: string }>(COL.users, session.uid) : null;
+
+      // Ensure fresh dailyReport and routines when loading My Day
+      if (actor && (op === 'daily.getForDate' || op === 'routine.get')) {
+        const p = payload as { workDate?: string } | undefined;
+        const workDate = p?.workDate;
+        const targetKey = workDate ? dailyKey(actor.id, workDate) : null;
+        const hasKey = targetKey ? await store.get(COL.uniqueKeys, targetKey) : true;
+        if (!hasKey) {
+          try {
+            const freshDaily = await getDocs(collection(db, 'dailyReports'));
+            await store.transaction(async (tx) => {
+              freshDaily.forEach((d) => {
+                const rep = d.data() as { employeeId?: string; workDate?: string; createdAt?: string };
+                tx.set(COL.dailyReports, d.id, rep as never);
+                if (rep.employeeId && rep.workDate) {
+                  const k = dailyKey(rep.employeeId, rep.workDate);
+                  tx.set(COL.uniqueKeys, k, { id: k, ownerId: d.id, createdAt: rep.createdAt || '' });
+                }
+              });
+            });
+          } catch {
+            // Non-fatal
+          }
+        }
+      }
       try {
         const result = await dispatch(
           {
