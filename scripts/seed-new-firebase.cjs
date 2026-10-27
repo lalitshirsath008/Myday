@@ -174,9 +174,31 @@ async function seed() {
     console.log(`Seeded authUser: ${authData.email} (${uid})`);
   }
 
+  function normalizeName(name) {
+    return name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function searchTokens(u) {
+    const tokens = new Set();
+    const add = (word) => {
+      if (!word) return;
+      for (let i = 1; i <= Math.min(word.length, 15); i++) tokens.add(word.slice(0, i));
+    };
+    for (const w of normalizeName(u.fullName || '').split(' ')) if (w) add(w);
+    if (u.employeeCode) add(u.employeeCode.toLowerCase());
+    for (const w of normalizeName(u.designation || '').split(' ')) if (w) add(w);
+    return [...tokens].slice(0, 200);
+  }
+
   // 2. Users
   for (const [uid, userData] of Object.entries(SEED_USERS)) {
-    await setDoc(doc(db, 'users', uid), userData);
+    const tokens = searchTokens(userData);
+    const norm = normalizeName(userData.fullName || '');
+    await setDoc(doc(db, 'users', uid), {
+      ...userData,
+      searchTokens: tokens,
+      normalizedName: norm
+    });
     console.log(`Seeded user: ${userData.fullName} (${userData.employeeCode})`);
   }
 

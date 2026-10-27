@@ -18,6 +18,8 @@ import {
   phoneKey,
   RGK_DEPARTMENTS,
   seedProductionData,
+  searchTokens,
+  normalizeName,
   type Doc,
   type StoreChange,
   type UserDoc,
@@ -36,7 +38,7 @@ import {
 import { ApiError, AuthFailure, type Backend, type Session } from './types';
 import { readFirebaseEnv } from './firebase';
 
-const DATA_KEY = 'rgk_worktrack_live_db_v5';
+const DATA_KEY = 'rgk_worktrack_live_db_v6';
 const SESSION_KEY = 'rgk_worktrack_live_session_v1';
 
 interface Persisted {
@@ -51,6 +53,7 @@ function loadLocal(): Persisted | null {
       localStorage.removeItem('rgk_worktrack_live_db_v2');
       localStorage.removeItem('rgk_worktrack_live_db_v3');
       localStorage.removeItem('rgk_worktrack_live_db_v4');
+      localStorage.removeItem('rgk_worktrack_live_db_v5');
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && k.startsWith('rgk_worktrack_live_db_') && k !== DATA_KEY) {
@@ -156,7 +159,13 @@ export async function createLiveBackend(): Promise<Backend> {
       if (!usersSnap.empty) {
         await store.transaction(async (tx) => {
           usersSnap.forEach((d) => {
-            const u = d.data() as UserDoc;
+            const u = { ...(d.data() as UserDoc) };
+            if (!Array.isArray(u.searchTokens) || u.searchTokens.length === 0) {
+              u.searchTokens = searchTokens(u);
+            }
+            if (!u.normalizedName) {
+              u.normalizedName = normalizeName(u.fullName || '');
+            }
             tx.set(COL.users, d.id, u as never);
             if (u.employeeCode) {
               const k = codeKey(u.employeeCode);
@@ -512,7 +521,13 @@ export async function createLiveBackend(): Promise<Backend> {
           if (!freshUsersSnap.empty) {
             await store.transaction(async (tx) => {
               freshUsersSnap.forEach((d) => {
-                const u = d.data() as UserDoc;
+                const u = { ...(d.data() as UserDoc) };
+                if (!Array.isArray(u.searchTokens) || u.searchTokens.length === 0) {
+                  u.searchTokens = searchTokens(u);
+                }
+                if (!u.normalizedName) {
+                  u.normalizedName = normalizeName(u.fullName || '');
+                }
                 tx.set(COL.users, d.id, u as never);
                 if (u.employeeCode) tx.set(COL.uniqueKeys, codeKey(u.employeeCode), { id: codeKey(u.employeeCode), ownerId: d.id, createdAt: '' });
                 if (u.phoneNumber) tx.set(COL.uniqueKeys, phoneKey(u.phoneNumber), { id: phoneKey(u.phoneNumber), ownerId: d.id, createdAt: '' });

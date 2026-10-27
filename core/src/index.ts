@@ -18,5 +18,5 @@ export { runReminders } from './ops/misc';
 export type { RoutineItem } from './ops/routine';
 export { createEmployee } from './ops/admin';
 export { syntheticEmail, isSyntheticEmail, codeKey, phoneKey } from './ops/auth';
-export { type UserSummary, type UserProfile, firstName } from './ops/helpers';
+export { type UserSummary, type UserProfile, firstName, searchTokens, normalizeName } from './ops/helpers';
 export { seedDemoData, DEMO_PASSWORD, seedProductionData, INITIAL_ADMIN_PASSWORD } from './seed';
