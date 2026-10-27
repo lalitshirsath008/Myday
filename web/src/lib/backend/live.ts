@@ -543,7 +543,38 @@ export async function createLiveBackend(): Promise<Backend> {
             );
           }
         } catch {
-          // Ignore
+          // Firestore lookup failed
+        }
+
+        // 2. Fallback to Vercel SQL database if user not found via Firestore
+        if (!matchedUser) {
+          try {
+            const sqlRes = await fetch('/api/sql');
+            if (sqlRes.ok) {
+              const sqlData = await sqlRes.json();
+              if (sqlData?.tables?.users) {
+                await store.transaction(async (tx) => {
+                  for (const [id, u] of Object.entries(sqlData.tables.users as Record<string, any>)) {
+                    tx.set(COL.users, id, u as never);
+                    if (u.employeeCode) tx.set(COL.uniqueKeys, codeKey(u.employeeCode), { id: codeKey(u.employeeCode), ownerId: id, createdAt: '' });
+                    if (u.phoneNumber) tx.set(COL.uniqueKeys, phoneKey(u.phoneNumber), { id: phoneKey(u.phoneNumber), ownerId: id, createdAt: '' });
+                    if (u.authEmail) tx.set(COL.uniqueKeys, `email_${u.authEmail.toLowerCase()}`, { id: `email_${u.authEmail.toLowerCase()}`, ownerId: id, createdAt: '' });
+                    if (u.officialEmail) tx.set(COL.uniqueKeys, `email_${u.officialEmail.toLowerCase()}`, { id: `email_${u.officialEmail.toLowerCase()}`, ownerId: id, createdAt: '' });
+                  }
+                });
+                allUsers = await store.query<UserDoc & { id: string }>(COL.users);
+                matchedUser = allUsers.find(
+                  (u) =>
+                    u.employeeCode?.toUpperCase() === input.toUpperCase() ||
+                    u.phoneNumber === input ||
+                    u.authEmail?.toLowerCase() === input.toLowerCase() ||
+                    (u.officialEmail && u.officialEmail.toLowerCase() === input.toLowerCase())
+                );
+              }
+            }
+          } catch {
+            // Ignore
+          }
         }
       }
 
@@ -569,6 +600,24 @@ export async function createLiveBackend(): Promise<Backend> {
             if (u.uid) auth.users.set(u.uid, u);
           });
           r = await auth.verify(targetEmail, password);
+        } catch {
+          // Ignore
+        }
+      }
+
+      // Fallback: Verify against Vercel SQL auth credentials if Firestore verify fails
+      if ('error' in r) {
+        try {
+          const sqlRes = await fetch('/api/sql');
+          if (sqlRes.ok) {
+            const sqlData = await sqlRes.json();
+            if (sqlData?.authUsers) {
+              for (const u of Object.values(sqlData.authUsers as Record<string, any>)) {
+                if (u.uid) auth.users.set(u.uid, u);
+              }
+              r = await auth.verify(targetEmail, password);
+            }
+          }
         } catch {
           // Ignore
         }

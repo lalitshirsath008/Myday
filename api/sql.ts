@@ -33,34 +33,57 @@ interface SqlStoreData {
 // In-memory runtime cache for serverless lifetime + disk persistence in /tmp
 const DB_FILE = path.join('/tmp', 'rgk_myday_backup.sql.json');
 
+const SEED_AUTH: Record<string, any> = {
+  "6c37f41fe4b14fcaac35f235c7e06190": { "email": "dataanalyst1@rgkgroup.net", "disabled": false, "hash": "01823c1224114a241fcc302e510de61fbeb9b6a1b472ee04cc8c6ead87987b17", "salt": "89e5a833ec0bd01be2155ecba9cc0480", "uid": "6c37f41fe4b14fcaac35f235c7e06190", "tokensValidAfter": 1793076008397 },
+  "e1c8ea3e545e44a0850ba0e7c5b023ab": { "hash": "33826748781e7116acbabcc8d4eadbb302ac94f7641ff85807c732e544e8f2bd", "email": "mktgsupport@rgkgroup.net", "uid": "e1c8ea3e545e44a0850ba0e7c5b023ab", "tokensValidAfter": 1793087005350, "salt": "e7a8960a55d7a02786f002c15e59a2c9", "disabled": false },
+  "ef508b278b8a492498cbef6b2dcb41dc": { "hash": "81ec1fc35be721217c91cf20cdf0849785a1dc2edde870674d94042eb7019de0", "email": "mktg@rgkgroup.net", "uid": "ef508b278b8a492498cbef6b2dcb41dc", "disabled": false, "tokensValidAfter": 1793017777704, "salt": "1971f9435f98fe17a86ebcaec4f1598b" },
+  "seed_admin01": { "salt": "48224f34cf84c2baa85f91ce9963404a", "tokensValidAfter": 1793086867522, "email": "admin@rgk.com", "uid": "seed_admin01", "disabled": false, "hash": "9844fa0b2e98b6272f9dbdb7d94d1facdf2151738899fcb5d4cb548c70a211d1" },
+  "user_saurabh": { "salt": "7a4ff64e5b04e2c767fa33c975c24d55", "email": "saurabh@rgk.com", "tokensValidAfter": 1793075784533, "uid": "user_saurabh", "disabled": true, "hash": "03f5092a537d1993edd0e4b604b033de1dadc1bc53b253554f4a0cd57942f60e" }
+};
+
+const SEED_USERS: Record<string, any> = {
+  "6c37f41fe4b14fcaac35f235c7e06190": { "employeeCode": "RGK428", "updatedAt": "2026-10-27T07:43:47.631Z", "departmentId": "dept_mda", "role": "REPORTING_MANAGER", "primaryReportingManagerId": "ef508b278b8a492498cbef6b2dcb41dc", "authEmail": "dataanalyst1@rgkgroup.net", "createdBy": "seed_admin01", "deactivatedAt": null, "fullName": "Lalit Sanjay Shirsath", "joinedAt": "2026-02-23", "phoneNumber": "9325109257", "designation": "Data Analyst", "id": "6c37f41fe4b14fcaac35f235c7e06190", "accountStatus": "ACTIVE", "location": "", "normalizedName": "lalit sanjay shirsath", "alternatePhone": "", "mustChangePassword": false, "activatedAt": "2026-10-27T04:37:46.047Z", "officialEmail": "dataanalyst1@rgkgroup.net" },
+  "e1c8ea3e545e44a0850ba0e7c5b023ab": { "phoneNumber": "9988776655", "officialEmail": "mktgsupport@rgkgroup.net", "departmentId": "dept_mda", "employeeCode": "RGK123", "designation": "Data Analyst", "createdAt": "2026-10-27T07:43:25.325Z", "primaryReportingManagerId": "6c37f41fe4b14fcaac35f235c7e06190", "role": "EMPLOYEE", "location": "", "accountStatus": "ACTIVE", "normalizedName": "devendra devidas gangurde", "alternatePhone": "", "joinedAt": "2026-07-23", "activatedAt": "2026-10-27T07:43:25.325Z", "id": "e1c8ea3e545e44a0850ba0e7c5b023ab", "updatedAt": "2026-10-27T07:44:02.095Z", "deactivatedAt": null, "authEmail": "mktgsupport@rgkgroup.net", "createdBy": "seed_admin01", "fullName": "Devendra Devidas Gangurde", "secondaryReviewerId": null, "mustChangePassword": false },
+  "ef508b278b8a492498cbef6b2dcb41dc": { "accountStatus": "ACTIVE", "mustChangePassword": false, "createdAt": "2026-10-26T12:29:37.683Z", "role": "REPORTING_MANAGER", "primaryReportingManagerId": null, "designation": "Business Analyst", "alternatePhone": "", "normalizedName": "saurabh arun patil", "officialEmail": "mktg@rgkgroup.net", "phoneNumber": "9405530185", "location": "", "id": "ef508b278b8a492498cbef6b2dcb41dc", "joinedAt": "2022-12-26", "createdBy": "seed_admin01", "authEmail": "mktg@rgkgroup.net", "deactivatedAt": null, "updatedAt": "2026-10-27T04:38:41.742Z", "employeeCode": "RGK376", "activatedAt": "2026-10-26T12:29:37.683Z", "secondaryReviewerId": null, "fullName": "Saurabh Arun Patil", "departmentId": "dept_mda" },
+  "seed_admin01": { "createdAt": "2026-10-26T12:58:21.412Z", "joinedAt": "2026-01-01", "deactivatedAt": null, "fullName": "RGK Admin", "designation": "Super Administrator", "role": "SUPER_ADMIN", "phoneNumber": "9000000000", "employeeCode": "ADMIN01", "departmentId": "dept_mgmt", "accountStatus": "ACTIVE", "primaryReportingManagerId": null, "alternatePhone": "", "normalizedName": "rgk admin", "createdBy": null, "authEmail": "admin@rgk.com", "mustChangePassword": false, "id": "seed_admin01", "location": "Head Office", "activatedAt": "2026-10-26T12:58:21.412Z", "secondaryReviewerId": null, "officialEmail": "admin@rgk.com", "updatedAt": "2026-10-27T07:41:07.526Z" }
+};
+
 function loadSqlDb(): SqlStoreData {
+  let db: SqlStoreData | null = null;
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf8');
-      return JSON.parse(raw);
+      db = JSON.parse(raw);
     }
   } catch {
     // Fresh memory store
   }
-  return {
-    tables: {
-      users: {},
-      departments: {},
-      dailyReports: {},
-      weeklyReports: {},
-      tasks: {},
-      systemSettings: {},
-      projects: {},
-      workCalendar: {},
-      dailyRoutines: {},
-      notifications: {},
-      reportReviews: {},
-      reportVersions: {},
-    },
-    authUsers: {},
-    firebaseSyncQueue: [],
-    lastUpdated: new Date().toISOString(),
-  };
+  if (!db) {
+    db = {
+      tables: {
+        users: { ...SEED_USERS },
+        departments: {},
+        dailyReports: {},
+        weeklyReports: {},
+        tasks: {},
+        systemSettings: {},
+        projects: {},
+        workCalendar: {},
+        dailyRoutines: {},
+        notifications: {},
+        reportReviews: {},
+        reportVersions: {},
+      },
+      authUsers: { ...SEED_AUTH },
+      firebaseSyncQueue: [],
+      lastUpdated: new Date().toISOString(),
+    };
+  } else {
+    // Ensure seed users exist in cache
+    db.tables.users = { ...SEED_USERS, ...db.tables.users };
+    db.authUsers = { ...SEED_AUTH, ...db.authUsers };
+  }
+  return db;
 }
 
 function saveSqlDb(data: SqlStoreData) {
