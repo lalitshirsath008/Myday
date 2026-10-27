@@ -267,17 +267,21 @@ function createBanner() {
     },
   });
   banner.setAlwaysOnTop(true, 'screen-saver');
-  banner.loadFile(path.join(__dirname, 'banner.html'));
-  banner.webContents.once('did-finish-load', () => {
+  const onBannerReady = () => {
     bannerReady = true;
     nextBanner();
-  });
+  };
+  banner.webContents.on('did-finish-load', onBannerReady);
+  banner.loadFile(path.join(__dirname, 'banner.html'));
+  setTimeout(onBannerReady, 600);
 }
 
 function nextBanner() {
   if (!bannerReady || bannerCurrent || !bannerQueue.length) return;
   bannerCurrent = bannerQueue.shift();
   banner.setBounds(bannerBounds());
+  banner.setAlwaysOnTop(true, 'screen-saver');
+  banner.moveTop();
   banner.webContents.send('banner:show', bannerCurrent);
   banner.showInactive();
 }
@@ -325,17 +329,21 @@ function createStrip() {
     },
   });
   strip.setAlwaysOnTop(true, 'screen-saver');
-  strip.loadFile(path.join(__dirname, 'strip.html'));
-  strip.webContents.once('did-finish-load', () => {
+  const onStripReady = () => {
     stripReady = true;
     nextStrip();
-  });
+  };
+  strip.webContents.on('did-finish-load', onStripReady);
+  strip.loadFile(path.join(__dirname, 'strip.html'));
+  setTimeout(onStripReady, 600);
 }
 
 function nextStrip() {
   if (!stripReady || stripCurrent || !stripQueue.length) return;
   stripCurrent = stripQueue.shift();
   strip.setBounds(stripBounds());
+  strip.setAlwaysOnTop(true, 'screen-saver');
+  strip.moveTop();
   strip.webContents.send('strip:show', stripCurrent);
   strip.showInactive();
 }
@@ -441,7 +449,7 @@ ipcMain.on('panel:unread', (e, unread) => {
 ipcMain.on('panel:notify', (e, n) => {
   if (!from(e, panel) || !n || typeof n.title !== 'string') return;
   const link = typeof n.link === 'string' && n.link.startsWith('/') && !n.link.startsWith('//') ? n.link.slice(0, 300) : null;
-  stripQueue.push({
+  const item = {
     type: 'notification',
     id: typeof n.id === 'string' ? n.id.slice(0, 100) : null,
     title: n.title.slice(0, 200),
@@ -450,9 +458,13 @@ ipcMain.on('panel:notify', (e, n) => {
     label: '',
     link,
     sound: n.sound !== false,
-  });
+  };
+  stripQueue.push(item);
   stripQueue = stripQueue.slice(-5);
   nextStrip();
+  bannerQueue.push(item);
+  bannerQueue = bannerQueue.slice(-5);
+  nextBanner();
 });
 ipcMain.on('banner:click', (e) => {
   if (!from(e, banner) || !bannerCurrent) return;

@@ -202,10 +202,13 @@
       // Soft three-note chime (web/src/lib/notifySound.ts).
       function chime() {
         try {
-          ctx = ctx || new AudioContext();
+          ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+          if (ctx.state === 'suspended') {
+            void ctx.resume();
+          }
           const t0 = ctx.currentTime + 0.02;
           const master = ctx.createGain();
-          master.gain.value = 0.35;
+          master.gain.value = 0.5;
           master.connect(ctx.destination);
           for (const [freq, at] of [[1318.51, 0], [1567.98, 0.1], [2093.0, 0.2]]) {
             for (const [mult, level] of [[1, 1], [2, 0.16]]) {
@@ -221,8 +224,8 @@
               osc.stop(t0 + at + 0.75);
             }
           }
-        } catch {
-          // Audio fallback
+        } catch (e) {
+          console.warn('Audio chime error:', e);
         }
       }
 

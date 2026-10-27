@@ -102,7 +102,6 @@ export function NotificationWatcher() {
       if (items && items.length > 0) {
         const fresh = items.filter((n) => n.userId === me.user.id && !n.read && !announced.current.has(n.id));
         if (fresh.length > 0) {
-          for (const n of fresh) announced.current.add(n.id);
           announce(fresh.slice(0, MAX_BANNERS).map((n) => ({ key: n.id, id: n.id, title: n.title, body: n.body, link: n.link })));
         }
       }
@@ -170,7 +169,6 @@ export function NotificationWatcher() {
     }
     if (!fresh.length) return;
 
-    for (const n of fresh) announced.current.add(n.id);
     announce(fresh.slice(0, MAX_BANNERS).map((n) => ({ key: n.id, id: n.id, title: n.title, body: n.body, link: n.link })));
   }, [q.data, storeKey, announce]);
 
