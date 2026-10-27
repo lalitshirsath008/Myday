@@ -90,9 +90,26 @@ export function NotificationWatcher() {
     [],
   );
 
-  // "Complete your 3 priority tasks" reminders: ask at each reminder time (the server decides whether
-  // one is due) and at least every 15 minutes as a safety net, e.g. after the laptop wakes from sleep.
   const qc = useQueryClient();
+
+  // Instant real-time announcements when notifications are pushed via Firestore or BroadcastChannel
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { items } = ((e as CustomEvent).detail || {}) as {
+        items?: Array<{ id: string; userId: string; read: boolean; title: string; body: string; link: string | null }>;
+      };
+      void qc.invalidateQueries({ queryKey: ['notifications.list'] });
+      if (items && items.length > 0) {
+        const fresh = items.filter((n) => n.userId === me.user.id && !n.read && !announced.current.has(n.id));
+        if (fresh.length > 0) {
+          for (const n of fresh) announced.current.add(n.id);
+          announce(fresh.slice(0, MAX_BANNERS).map((n) => ({ key: n.id, id: n.id, title: n.title, body: n.body, link: n.link })));
+        }
+      }
+    };
+    window.addEventListener('rgk:notifications-synced', handler);
+    return () => window.removeEventListener('rgk:notifications-synced', handler);
+  }, [qc, me.user.id, announce]);
   useEffect(() => {
     if (!me.isReporter) return;
     let timer: ReturnType<typeof setTimeout> | undefined;

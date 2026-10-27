@@ -18,6 +18,7 @@ import {
   phoneKey,
   RGK_DEPARTMENTS,
   seedProductionData,
+  type StoreChange,
   type UserDoc,
 } from '@rgk/core';
 import { initializeApp, getApps, getApp } from 'firebase/app';
@@ -25,6 +26,7 @@ import {
   getFirestore,
   doc,
   setDoc,
+  deleteDoc,
   getDocs,
   collection,
   onSnapshot,
@@ -69,41 +71,30 @@ export async function createLiveBackend(): Promise<Backend> {
       });
   const db: Firestore = getFirestore(fbApp);
 
-  const persistToFirestore = async () => {
-    try {
-      const snap = store.snapshot();
-      const collectionsToSync = [
-        'users',
-        'departments',
-        'dailyReports',
-        'weeklyReports',
-        'tasks',
-        'systemSettings',
-        'projects',
-        'workCalendar',
-        'dailyRoutines',
-        'notifications',
-        'reportReviews',
-        'reportVersions',
-      ];
-      for (const colName of collectionsToSync) {
-        const colDocs = snap[colName];
-        if (colDocs) {
-          for (const [id, data] of Object.entries(colDocs)) {
-            // Asynchronously sync to Cloud Firestore
-            setDoc(doc(db, colName, id), data).catch(() => {});
-          }
+  let isRemoteSync = false;
+  const liveBus = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('rgk_live_bus') : null;
+
+  const syncChangesToFirestore = async (changes: StoreChange[]) => {
+    for (const ch of changes) {
+      if (ch.col === 'uniqueKeys' || ch.col === 'counters') continue;
+      const ref = doc(db, ch.col, ch.id);
+      if (ch.doc === null) {
+        deleteDoc(ref).catch(() => {});
+      } else {
+        setDoc(ref, ch.doc).catch((err) => {
+          console.warn(`Firestore sync [${ch.col}/${ch.id}]:`, err?.message || err);
+        });
+      }
+      if (ch.col === 'users') {
+        const u = auth.snapshot().find((a) => a.uid === ch.id);
+        if (u) {
+          setDoc(doc(db, 'authUsers', u.uid), u).catch(() => {});
         }
       }
-      for (const u of auth.snapshot()) {
-        setDoc(doc(db, 'authUsers', u.uid), u).catch(() => {});
-      }
-    } catch {
-      // Background sync non-fatal error
     }
   };
 
-  const persist = () => {
+  const persist = (changes?: StoreChange[]) => {
     try {
       localStorage.setItem(
         DATA_KEY,
@@ -112,8 +103,24 @@ export async function createLiveBackend(): Promise<Backend> {
     } catch {
       // Storage quota or private browsing mode
     }
-    // Mirror to Cloud Firestore
-    void persistToFirestore();
+
+    // Instantly sync across tabs and Electron desktop companion on the same machine
+    if (liveBus && changes && changes.length > 0) {
+      try {
+        liveBus.postMessage({ type: 'sync_changes', changes });
+      } catch {
+        // Bus error non-fatal
+      }
+    }
+
+    // CRITICAL: Do NOT echo changes back to Firestore if they arrived from remote Firestore onSnapshot!
+    if (isRemoteSync) {
+      return;
+    }
+
+    if (changes && changes.length > 0) {
+      void syncChangesToFirestore(changes);
+    }
   };
 
   const init = async () => {
@@ -273,53 +280,104 @@ export async function createLiveBackend(): Promise<Backend> {
     try {
       onSnapshot(collection(db, 'dailyReports'), (snap) => {
         if (!snap.empty) {
-          void store.transaction(async (tx) => {
-            snap.docChanges().forEach((c) => {
-              if (c.type === 'removed') {
-                tx.delete(COL.dailyReports, c.doc.id);
-              } else {
-                const rep = c.doc.data() as { employeeId?: string; workDate?: string; createdAt?: string };
-                tx.set(COL.dailyReports, c.doc.id, rep as never);
-                if (rep.employeeId && rep.workDate) {
-                  const k = dailyKey(rep.employeeId, rep.workDate);
-                  tx.set(COL.uniqueKeys, k, { id: k, ownerId: c.doc.id, createdAt: rep.createdAt || '' });
+          isRemoteSync = true;
+          void store
+            .transaction(async (tx) => {
+              snap.docChanges().forEach((c) => {
+                if (c.type === 'removed') {
+                  tx.delete(COL.dailyReports, c.doc.id);
+                } else {
+                  const rep = c.doc.data() as { employeeId?: string; workDate?: string; createdAt?: string };
+                  tx.set(COL.dailyReports, c.doc.id, rep as never);
+                  if (rep.employeeId && rep.workDate) {
+                    const k = dailyKey(rep.employeeId, rep.workDate);
+                    tx.set(COL.uniqueKeys, k, { id: k, ownerId: c.doc.id, createdAt: rep.createdAt || '' });
+                  }
                 }
-              }
+              });
+            })
+            .finally(() => {
+              isRemoteSync = false;
             });
-          });
         }
       });
 
       onSnapshot(collection(db, 'dailyRoutines'), (snap) => {
         if (!snap.empty) {
-          void store.transaction(async (tx) => {
-            snap.docChanges().forEach((c) => {
-              if (c.type === 'removed') {
-                tx.delete(COL.dailyRoutines, c.doc.id);
-              } else {
-                tx.set(COL.dailyRoutines, c.doc.id, c.doc.data() as never);
-              }
+          isRemoteSync = true;
+          void store
+            .transaction(async (tx) => {
+              snap.docChanges().forEach((c) => {
+                if (c.type === 'removed') {
+                  tx.delete(COL.dailyRoutines, c.doc.id);
+                } else {
+                  tx.set(COL.dailyRoutines, c.doc.id, c.doc.data() as never);
+                }
+              });
+            })
+            .finally(() => {
+              isRemoteSync = false;
             });
-          });
         }
       });
 
       onSnapshot(collection(db, 'notifications'), (snap) => {
         if (!snap.empty) {
-          void store.transaction(async (tx) => {
-            snap.docChanges().forEach((c) => {
-              if (c.type === 'removed') {
-                tx.delete(COL.notifications, c.doc.id);
-              } else {
-                tx.set(COL.notifications, c.doc.id, c.doc.data() as never);
+          const freshDocs: any[] = [];
+          isRemoteSync = true;
+          void store
+            .transaction(async (tx) => {
+              snap.docChanges().forEach((c) => {
+                if (c.type === 'removed') {
+                  tx.delete(COL.notifications, c.doc.id);
+                } else {
+                  const d = c.doc.data();
+                  tx.set(COL.notifications, c.doc.id, d as never);
+                  if (c.type === 'added' || c.type === 'modified') {
+                    freshDocs.push({ ...d, id: c.doc.id });
+                  }
+                }
+              });
+            })
+            .finally(() => {
+              isRemoteSync = false;
+              if (freshDocs.length > 0) {
+                window.dispatchEvent(new CustomEvent('rgk:notifications-synced', { detail: { items: freshDocs } }));
               }
             });
-          });
         }
       });
     } catch (err) {
       console.warn('Real-time listener setup non-fatal:', err);
     }
+
+    if (liveBus) {
+      liveBus.onmessage = (e) => {
+        if (e.data?.type === 'sync_changes' && Array.isArray(e.data.changes)) {
+          isRemoteSync = true;
+          void store
+            .transaction(async (tx) => {
+              for (const ch of e.data.changes) {
+                if (ch.doc === null) {
+                  tx.delete(ch.col, ch.id);
+                } else {
+                  tx.set(ch.col, ch.id, ch.doc);
+                }
+              }
+            })
+            .finally(() => {
+              isRemoteSync = false;
+              const notifChanges = e.data.changes
+                .filter((c: any) => c.col === COL.notifications && c.doc !== null)
+                .map((c: any) => c.doc);
+              if (notifChanges.length > 0) {
+                window.dispatchEvent(new CustomEvent('rgk:notifications-synced', { detail: { items: notifChanges } }));
+              }
+            });
+        }
+      };
+    }
+
     store.onChange = persist;
   };
 

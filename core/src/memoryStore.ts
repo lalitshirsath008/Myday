@@ -43,6 +43,12 @@ function matches(doc: Doc, [field, op, value]: Filter): boolean {
   }
 }
 
+export interface StoreChange {
+  col: string;
+  id: string;
+  doc: Doc | null;
+}
+
 /**
  * In-memory implementation of Store with Firestore-like semantics (including the
  * reads-before-writes transaction rule). Used by unit tests and the browser demo backend.
@@ -50,7 +56,7 @@ function matches(doc: Doc, [field, op, value]: Filter): boolean {
 export class MemoryStore implements Store {
   private data: Data;
   private queue: Promise<unknown> = Promise.resolve();
-  onChange?: () => void;
+  onChange?: (changes: StoreChange[]) => void;
 
   constructor(initial?: Data) {
     this.data = initial ? clone(initial) : {};
@@ -151,7 +157,16 @@ export class MemoryStore implements Store {
       };
       const result = await fn(tx);
       for (const w of writes) w();
-      if (writes.length) this.onChange?.();
+      if (writes.length) {
+        const changes: StoreChange[] = [];
+        for (const [k, v] of pending.entries()) {
+          const slash = k.indexOf('/');
+          const col = k.slice(0, slash);
+          const id = k.slice(slash + 1);
+          changes.push({ col, id, doc: v });
+        }
+        this.onChange?.(changes);
+      }
       return result;
     };
     const p = this.queue.then(run, run);
