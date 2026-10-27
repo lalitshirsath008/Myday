@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('rgkWidget', {
   hide: () => ipcRenderer.send('panel:hide'),
+  reload: () => ipcRenderer.send('panel:reload'),
   setCount: (done, total) => ipcRenderer.send('panel:count', done, total),
   setUnread: (unread) => ipcRenderer.send('panel:unread', unread),
   notify: (n) => ipcRenderer.send('panel:notify', n),

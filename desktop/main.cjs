@@ -108,9 +108,17 @@ function createPanel() {
     return { action: 'deny' };
   });
   panel.webContents.on('before-input-event', (e, input) => {
-    if (input.type === 'keyDown' && input.key === 'Escape') {
-      e.preventDefault();
-      hidePanel();
+    if (input.type === 'keyDown') {
+      if (input.key === 'Escape') {
+        e.preventDefault();
+        hidePanel();
+      } else if (input.key === 'F5' || ((input.control || input.meta) && input.key.toLowerCase() === 'r')) {
+        e.preventDefault();
+        reloadPanel();
+      } else if (input.key === 'F12' || ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i')) {
+        e.preventDefault();
+        panel.webContents.toggleDevTools();
+      }
     }
   });
   // If the site isn't reachable, show a short message with retry & localhost options.
@@ -140,6 +148,23 @@ function createPanel() {
       hidePanel();
     }
   });
+}
+
+function reloadPanel() {
+  if (!panel || panel.isDestroyed()) return;
+  panel.webContents.session
+    .clearCache()
+    .then(() => {
+      const cur = panel.webContents.getURL();
+      if (!cur || cur.startsWith('data:')) {
+        panel.loadURL(PANEL_URL);
+      } else {
+        panel.webContents.reloadIgnoringCache();
+      }
+    })
+    .catch(() => {
+      panel.webContents.reloadIgnoringCache();
+    });
 }
 
 // Offline: quietly try again every 20 seconds (and when the laptop wakes up) until the site loads.
@@ -345,7 +370,7 @@ function buildTray() {
             panel.loadURL(PANEL_URL);
           },
         },
-        { label: 'Reload', click: () => panel.loadURL(PANEL_URL) },
+        { label: 'Reload & Clear Cache (Ctrl+R)', click: () => reloadPanel() },
         { label: 'Quit', click: () => app.quit() },
       ]),
     );
@@ -376,6 +401,7 @@ ipcMain.on('tab:drag-end', (e) => {
   writeSettings({ tabY: (tab.getBounds().y - wa.y) / Math.max(1, wa.height - TAB.height) });
 });
 ipcMain.on('panel:hide', (e) => from(e, panel) && hidePanel());
+ipcMain.on('panel:reload', (e) => from(e, panel) && reloadPanel());
 ipcMain.on('panel:count', (e, done, total) => {
   if (!from(e, panel) || !Number.isInteger(done) || !Number.isInteger(total)) return;
   tab.webContents.send('count', done, total);

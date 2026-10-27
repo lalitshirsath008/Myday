@@ -1,7 +1,7 @@
 import * as D from '@radix-ui/react-dialog';
 import type { RoutineItem } from '@rgk/core';
 import { firstName } from '@rgk/core';
-import { Check, ListChecks, Lock, Plus, Repeat, Trash2, X } from 'lucide-react';
+import { Check, ListChecks, Lock, LogOut, Plus, Repeat, RotateCw, Trash2, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { PANEL_NOTIFICATIONS, PanelNotifications } from './PanelNotifications';
 import { type StartAlert, TaskStartStrip, useTaskStartAlerts } from './TaskStartAlerts';
 import { TodayPriorityTasks } from './TodayPriorityTasks';
 import { useOp, useOpMutation } from '@/lib/api';
-import { useMe } from '@/lib/session';
+import { useMe, useSession } from '@/lib/session';
 import { cn, fmtDate, fmtTime } from '@/lib/utils';
 
 const SUGGESTIONS = ['Check emails', 'Shop-floor round', 'Team meeting', 'Update stock register', 'Call supplier', 'Machine check-up'];
@@ -102,17 +102,84 @@ export function MyDayPanel({ state, onClose, className, extra }: { state: MyDayS
   };
   const sorted = [...items].sort((a, b) => Number(a.done) - Number(b.done) || (a.time ?? '99').localeCompare(b.time ?? '99'));
 
+  const { signOut } = useSession();
+  const qc = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await qc.invalidateQueries();
+      await state.refetch?.();
+    } catch {
+      // ignore
+    }
+    if (window.rgkWidget?.reload) {
+      window.rgkWidget.reload();
+    } else {
+      window.location.reload();
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    if (window.confirm('Are you sure you want to sign out of RGK Myday?')) {
+      setSigningOut(true);
+      try {
+        await signOut();
+        onClose?.();
+      } catch (err) {
+        console.error('Sign out error:', err);
+      } finally {
+        setSigningOut(false);
+      }
+    }
+  };
+
   return (
     <div className={cn('flex h-full flex-col bg-card', className)}>
       <div className="pt-safe relative shrink-0 overflow-hidden border-b bg-gradient-to-br from-brand-soft via-card to-card px-4 pb-3">
         <div aria-hidden className="absolute -right-10 -top-10 size-36 rounded-full bg-brand/15 blur-2xl" />
         <div className="relative flex items-center justify-between pt-3">
           <span className="rounded-full bg-card/80 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">{fmtDate(me.today, { weekday: 'long', day: 'numeric', month: 'short' })}</span>
-          {onClose && (
-            <Button variant="ghost" size="icon" className="size-8" aria-label="Close" onClick={onClose}>
-              <X />
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-lg text-muted-foreground hover:bg-card hover:text-foreground"
+              title="Refresh latest updates (Ctrl+R)"
+              aria-label="Refresh latest updates"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RotateCw className={cn('size-4', refreshing && 'animate-spin text-brand')} />
             </Button>
-          )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-lg text-muted-foreground hover:bg-danger/10 hover:text-danger"
+              title="Sign out"
+              aria-label="Sign out"
+              onClick={handleSignOut}
+              disabled={signingOut}
+            >
+              <LogOut className="size-4" />
+            </Button>
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 rounded-lg text-muted-foreground hover:bg-card hover:text-foreground"
+                aria-label="Close"
+                title="Close (Esc)"
+                onClick={onClose}
+              >
+                <X className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
         <h2 className="relative mt-1 text-[19px] font-semibold leading-tight tracking-tight">
           <span className="inline-block animate-[word-in_0.5s_cubic-bezier(0.2,0.8,0.2,1)_both]">Hi, {name}</span>{' '}
