@@ -84,13 +84,26 @@ export const authOps = {
       const isEmail = clean.includes('@');
       const phone = !isEmail ? phoneNumber.safeParse(clean) : null;
       const key = isEmail
-        ? `email_${identifier.toLowerCase()}`
+        ? `email_${clean.toLowerCase()}`
         : phone?.success
           ? phoneKey(phone.data)
-          : codeKey(identifier);
+          : codeKey(clean);
       const ref = await ctx.store.get<UniqueKeyDoc & { id: string }>(COL.uniqueKeys, key);
-      const user = ref ? await ctx.store.get<UserDoc & { id: string }>(COL.users, ref.ownerId) : null;
+      let user = ref ? await ctx.store.get<UserDoc & { id: string }>(COL.users, ref.ownerId) : null;
+      if (!user) {
+        // Fallback: search users collection directly in case uniqueKeys was not populated
+        const all = await ctx.store.query<UserDoc & { id: string }>(COL.users, { limit: 1000 });
+        user =
+          all.find(
+            (u) =>
+              (isEmail &&
+                (u.authEmail?.toLowerCase() === clean.toLowerCase() ||
+                  u.officialEmail?.toLowerCase() === clean.toLowerCase())) ||
+              (!isEmail && (u.employeeCode?.toUpperCase() === clean.toUpperCase() || u.phoneNumber === clean)),
+          ) ?? null;
+      }
       if (user) return { email: user.authEmail };
+      if (isEmail) return { email: clean.toLowerCase() };
       return { email: `unknown-${(await sha256Hex(key)).slice(0, 16)}@users.rgk-worktrack.invalid` };
     },
   }),

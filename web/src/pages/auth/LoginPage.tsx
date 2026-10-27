@@ -38,7 +38,9 @@ export function LoginPage() {
       let email = identifier.trim();
       try {
         const resolved = await api('auth.resolveIdentifier', { identifier: email });
-        if (resolved?.email) email = resolved.email;
+        if (resolved?.email && !resolved.email.endsWith('.invalid')) {
+          email = resolved.email;
+        }
       } catch {
         // Fallback directly to identifier
       }

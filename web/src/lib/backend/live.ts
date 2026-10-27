@@ -9,10 +9,12 @@
 import {
   AppError,
   COL,
+  codeKey,
   dispatch,
   INITIAL_ADMIN_PASSWORD,
   MemoryAuth,
   MemoryStore,
+  phoneKey,
   RGK_DEPARTMENTS,
   seedProductionData,
   type UserDoc,
@@ -125,7 +127,24 @@ export async function createLiveBackend(): Promise<Backend> {
       if (!usersSnap.empty) {
         await store.transaction(async (tx) => {
           usersSnap.forEach((d) => {
-            tx.set(COL.users, d.id, d.data() as never);
+            const u = d.data() as UserDoc;
+            tx.set(COL.users, d.id, u as never);
+            if (u.employeeCode) {
+              const k = codeKey(u.employeeCode);
+              tx.set(COL.uniqueKeys, k, { id: k, ownerId: d.id, createdAt: '' });
+            }
+            if (u.phoneNumber) {
+              const k = phoneKey(u.phoneNumber);
+              tx.set(COL.uniqueKeys, k, { id: k, ownerId: d.id, createdAt: '' });
+            }
+            if (u.authEmail) {
+              const k = `email_${u.authEmail.toLowerCase()}`;
+              tx.set(COL.uniqueKeys, k, { id: k, ownerId: d.id, createdAt: '' });
+            }
+            if (u.officialEmail) {
+              const k = `email_${u.officialEmail.toLowerCase()}`;
+              tx.set(COL.uniqueKeys, k, { id: k, ownerId: d.id, createdAt: '' });
+            }
           });
         });
       }
@@ -264,14 +283,44 @@ export async function createLiveBackend(): Promise<Backend> {
       let targetEmail = input.toLowerCase();
 
       // Check if input is employeeCode, officialEmail, or phone number
-      const allUsers = await store.query<UserDoc & { id: string }>(COL.users);
-      const matchedUser = allUsers.find(
+      let allUsers = await store.query<UserDoc & { id: string }>(COL.users);
+      let matchedUser = allUsers.find(
         (u) =>
-          u.employeeCode.toUpperCase() === input.toUpperCase() ||
+          u.employeeCode?.toUpperCase() === input.toUpperCase() ||
           u.phoneNumber === input ||
-          u.authEmail.toLowerCase() === input.toLowerCase() ||
+          u.authEmail?.toLowerCase() === input.toLowerCase() ||
           (u.officialEmail && u.officialEmail.toLowerCase() === input.toLowerCase())
       );
+
+      // If user isn't found in memory store yet (e.g. fresh session on desktop or another client), fetch from Firestore
+      if (!matchedUser) {
+        try {
+          const freshUsersSnap = await getDocs(collection(db, 'users'));
+          if (!freshUsersSnap.empty) {
+            await store.transaction(async (tx) => {
+              freshUsersSnap.forEach((d) => {
+                const u = d.data() as UserDoc;
+                tx.set(COL.users, d.id, u as never);
+                if (u.employeeCode) tx.set(COL.uniqueKeys, codeKey(u.employeeCode), { id: codeKey(u.employeeCode), ownerId: d.id, createdAt: '' });
+                if (u.phoneNumber) tx.set(COL.uniqueKeys, phoneKey(u.phoneNumber), { id: phoneKey(u.phoneNumber), ownerId: d.id, createdAt: '' });
+                if (u.authEmail) tx.set(COL.uniqueKeys, `email_${u.authEmail.toLowerCase()}`, { id: `email_${u.authEmail.toLowerCase()}`, ownerId: d.id, createdAt: '' });
+                if (u.officialEmail) tx.set(COL.uniqueKeys, `email_${u.officialEmail.toLowerCase()}`, { id: `email_${u.officialEmail.toLowerCase()}`, ownerId: d.id, createdAt: '' });
+              });
+            });
+            allUsers = await store.query<UserDoc & { id: string }>(COL.users);
+            matchedUser = allUsers.find(
+              (u) =>
+                u.employeeCode?.toUpperCase() === input.toUpperCase() ||
+                u.phoneNumber === input ||
+                u.authEmail?.toLowerCase() === input.toLowerCase() ||
+                (u.officialEmail && u.officialEmail.toLowerCase() === input.toLowerCase())
+            );
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
       if (matchedUser) {
         targetEmail = matchedUser.authEmail.toLowerCase();
       }
