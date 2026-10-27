@@ -27,13 +27,22 @@ const activeSettings = readSettings();
 const appUrlStr = process.env.RGK_APP_URL || activeSettings.appUrl || config.appUrl;
 let APP_URL = new URL(appUrlStr);
 let PANEL_URL = new URL('/widget/my-day', APP_URL).toString();
-const TAB = { width: 34, height: 112 };
+const TAB = { width: 48, height: 124 };
 const PANEL_WIDTH = 420;
 const BANNER = { width: 392, height: 112 };
 const STRIP = { width: 600, height: 172 };
 
 let tab, panel, tray, banner, strip;
 let lastBlurHide = 0;
+let lastCount = { done: 0, total: 0 };
+let lastUnread = 0;
+
+function sendTabState() {
+  if (tab && !tab.isDestroyed() && tab.webContents) {
+    tab.webContents.send('count', lastCount.done, lastCount.total);
+    tab.webContents.send('unread', lastUnread);
+  }
+}
 
 const workArea = () => screen.getPrimaryDisplay().workArea;
 
@@ -66,6 +75,7 @@ function createTab() {
   tab.setVisibleOnAllWorkspaces(true);
   placeTab();
   tab.loadFile(path.join(__dirname, 'tab.html'));
+  tab.webContents.on('did-finish-load', () => sendTabState());
   tab.once('ready-to-show', () => !readSettings().tabHidden && tab.showInactive());
 }
 
@@ -404,26 +414,34 @@ ipcMain.on('panel:hide', (e) => from(e, panel) && hidePanel());
 ipcMain.on('panel:reload', (e) => from(e, panel) && reloadPanel());
 ipcMain.on('panel:count', (e, done, total) => {
   if (!from(e, panel) || !Number.isInteger(done) || !Number.isInteger(total)) return;
-  tab.webContents.send('count', done, total);
-  tray.setToolTip(total ? `My day: ${done} of ${total} done` : 'RGK WorkTrack — My day');
+  lastCount = { done, total };
+  sendTabState();
+  const unreadSuffix = lastUnread > 0 ? ` · ${lastUnread} unread` : '';
+  tray.setToolTip(total ? `My day: ${done} of ${total} done${unreadSuffix}` : `RGK Myday${unreadSuffix}`);
 });
 ipcMain.on('panel:unread', (e, unread) => {
   if (!from(e, panel) || !Number.isInteger(unread) || unread < 0) return;
-  tab.webContents.send('unread', unread);
+  lastUnread = unread;
+  sendTabState();
+  const unreadSuffix = lastUnread > 0 ? ` · ${lastUnread} unread` : '';
+  tray.setToolTip(lastCount.total ? `My day: ${lastCount.done} of ${lastCount.total} done${unreadSuffix}` : `RGK Myday${unreadSuffix}`);
 });
 // A new notification from the page. Only same-site links (a path like /reports/...) are accepted.
 ipcMain.on('panel:notify', (e, n) => {
   if (!from(e, panel) || !n || typeof n.title !== 'string') return;
   const link = typeof n.link === 'string' && n.link.startsWith('/') && !n.link.startsWith('//') ? n.link.slice(0, 300) : null;
-  bannerQueue.push({
+  stripQueue.push({
+    type: 'notification',
     id: typeof n.id === 'string' ? n.id.slice(0, 100) : null,
     title: n.title.slice(0, 200),
     body: typeof n.body === 'string' ? n.body.slice(0, 500) : '',
+    timeLabel: 'New Notification',
+    label: '',
     link,
     sound: n.sound !== false,
   });
-  bannerQueue = bannerQueue.slice(-3);
-  nextBanner();
+  stripQueue = stripQueue.slice(-5);
+  nextStrip();
 });
 ipcMain.on('banner:click', (e) => {
   if (!from(e, banner) || !bannerCurrent) return;
@@ -437,6 +455,7 @@ ipcMain.on('banner:done', (e) => from(e, banner) && bannerDone());
 ipcMain.on('panel:task-alert', (e, a) => {
   if (!from(e, panel) || !a || typeof a.title !== 'string' || typeof a.time !== 'string' || !/^\d{2}:\d{2}$/.test(a.time)) return;
   stripQueue.push({
+    type: 'task',
     title: a.title.slice(0, 200),
     time: a.time,
     timeLabel: typeof a.timeLabel === 'string' ? a.timeLabel.slice(0, 20) : a.time,
@@ -446,7 +465,13 @@ ipcMain.on('panel:task-alert', (e, a) => {
   stripQueue = stripQueue.slice(-5);
   nextStrip();
 });
-ipcMain.on('strip:open', (e) => from(e, strip) && showPanel());
+ipcMain.on('strip:open', (e, data) => {
+  if (!from(e, strip)) return;
+  const current = data || stripCurrent;
+  if (current?.id) panel.webContents.send('notification:opened', current.id);
+  if (current?.link) shell.openExternal(new URL(current.link, APP_URL).toString());
+  else showPanel();
+});
 ipcMain.on('strip:done', (e) => from(e, strip) && stripDone());
 
 // One copy only: starting it again just opens the panel.

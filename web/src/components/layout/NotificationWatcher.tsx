@@ -58,7 +58,6 @@ export function NotificationWatcher() {
   const announced = useRef(new Set<string>());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const storeKey = `rgk-notified-until:${me.user.id}`;
-  const desktop = typeof window !== 'undefined' ? window.rgkWidget : undefined;
 
   useEffect(() => unlockAudioOnFirstGesture(), []);
 
@@ -67,12 +66,12 @@ export function NotificationWatcher() {
   useEffect(() => {
     const base = document.title.replace(/^\(\d+\+?\) /, '');
     document.title = unread ? `(${unread > 99 ? '99+' : unread}) ${base}` : base;
-    desktop?.setUnread?.(unread);
-  }, [unread, desktop]);
+    window.rgkWidget?.setUnread?.(unread);
+  }, [unread]);
 
-  // A banner clicked in the desktop app marks its notification read here.
+  // A banner or strip clicked in the desktop app marks its notification read here.
   const mark = markRead.mutate;
-  useEffect(() => desktop?.onNotificationOpened?.((id) => mark({ ids: [id] })), [desktop, mark]);
+  useEffect(() => window.rgkWidget?.onNotificationOpened?.((id) => mark({ ids: [id] })), [mark]);
 
   // Show banners (or hand them to the desktop app) with one chime; never the same notification twice.
   const announce = useCallback(
@@ -80,15 +79,15 @@ export function NotificationWatcher() {
       const fresh = list.filter((b) => !b.id || !announced.current.has(b.id));
       for (const b of fresh) if (b.id) announced.current.add(b.id);
       if (!fresh.length) return;
-      if (desktop?.notify) {
-        for (const b of fresh) desktop.notify({ id: b.id, title: b.title, body: b.body, link: b.link, sound: soundEnabled() });
+      if (window.rgkWidget?.notify) {
+        for (const b of fresh) window.rgkWidget.notify({ id: b.id, title: b.title, body: b.body, link: b.link, sound: soundEnabled() });
       }
       playChime();
-      if (!desktop?.notify) {
+      if (!window.rgkWidget?.notify) {
         setBanners((cur) => [...fresh, ...cur.filter((c) => !fresh.some((b) => b.key === c.key))].slice(0, MAX_BANNERS));
       }
     },
-    [desktop],
+    [],
   );
 
   // "Complete your 3 priority tasks" reminders: ask at each reminder time (the server decides whether
@@ -187,7 +186,7 @@ export function NotificationWatcher() {
     if (b.link) navigate(b.link);
   };
 
-  if (desktop?.notify || banners.length === 0) return null;
+  if (window.rgkWidget?.notify || banners.length === 0) return null;
   return (
     <div
       className="pointer-events-none fixed inset-x-0 top-[max(0.5rem,env(safe-area-inset-top))] z-[90] flex flex-col items-center gap-2 px-3 sm:inset-x-auto sm:right-4 sm:top-[4.5rem] sm:items-end sm:px-0"

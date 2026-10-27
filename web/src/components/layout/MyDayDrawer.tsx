@@ -107,6 +107,12 @@ export function MyDayPanel({ state, onClose, className, extra }: { state: MyDayS
   const [refreshing, setRefreshing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
+  useEffect(() => {
+    if (typeof notes.data?.unreadCount === 'number') {
+      window.rgkWidget?.setUnread?.(notes.data.unreadCount);
+    }
+  }, [notes.data?.unreadCount]);
+
   const handleRefresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -361,8 +367,10 @@ export function MyDayPanel({ state, onClose, className, extra }: { state: MyDayS
  */
 export function MyDayDrawer() {
   const state = useMyDay();
+  const notes = useOp('notifications.list', PANEL_NOTIFICATIONS, { refetchInterval: 60_000, staleTime: 30_000 });
   const [open, setOpen] = useState(false);
   const { items, done } = state;
+  const unread = notes.data?.unreadCount ?? 0;
   // When a timed task's start time comes, a strip slides out of the tab (with a chime).
   const [alerts, setAlerts] = useState<StartAlert[]>([]);
   useTaskStartAlerts(items, (a) => setAlerts((cur) => [...cur, a]));
@@ -375,6 +383,14 @@ export function MyDayDrawer() {
           className="no-print tap fixed right-0 top-[42%] z-30 flex cursor-pointer flex-col items-center gap-1.5 rounded-l-2xl bg-primary px-1.5 py-3 text-primary-foreground shadow-[0_6px_20px_rgba(200,83,10,0.35)] hover:pr-2.5 lg:px-2"
           aria-label={`My day: ${done} of ${items.length} routine tasks done`}
         >
+          {unread > 0 && (
+            <span
+              className="absolute -left-2 -top-2 flex size-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-md ring-2 ring-card animate-in zoom-in"
+              title={`${unread} unread notification${unread === 1 ? '' : 's'}`}
+            >
+              {unread > 99 ? '99+' : unread}
+            </span>
+          )}
           <ListChecks className="size-4" aria-hidden />
           <span className="text-[11px] font-semibold tracking-wide [writing-mode:vertical-rl]">My day</span>
           {items.length > 0 && <span className="rounded-full bg-white/20 px-1 text-[10px] font-semibold tabular-nums">{done}/{items.length}</span>}
