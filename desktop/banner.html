@@ -167,7 +167,7 @@
           ctx = ctx || new AudioContext();
           const t0 = ctx.currentTime + 0.02;
           const master = ctx.createGain();
-          master.gain.value = 0.16;
+          master.gain.value = 0.35;
           master.connect(ctx.destination);
           for (const [freq, at] of [[1318.51, 0], [1567.98, 0.1], [2093.0, 0.2]]) {
             for (const [mult, level] of [[1, 1], [2, 0.16]]) {

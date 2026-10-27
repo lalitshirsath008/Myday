@@ -119,7 +119,7 @@ export async function createLiveBackend(): Promise<Backend> {
   const init = async () => {
     // 1. Try to hydrate from Cloud Firestore first
     try {
-      const [usersSnap, authSnap, deptSnap, dailySnap, weeklySnap, routineSnap, tasksSnap, projSnap] = await Promise.all([
+      const [usersSnap, authSnap, deptSnap, dailySnap, weeklySnap, routineSnap, tasksSnap, projSnap, notesSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'authUsers')),
         getDocs(collection(db, 'departments')),
@@ -128,6 +128,7 @@ export async function createLiveBackend(): Promise<Backend> {
         getDocs(collection(db, 'dailyRoutines')),
         getDocs(collection(db, 'tasks')),
         getDocs(collection(db, 'projects')),
+        getDocs(collection(db, 'notifications')),
       ]);
 
       if (!usersSnap.empty) {
@@ -223,6 +224,14 @@ export async function createLiveBackend(): Promise<Backend> {
           });
         });
       }
+
+      if (!notesSnap.empty) {
+        await store.transaction(async (tx) => {
+          notesSnap.forEach((d) => {
+            tx.set(COL.notifications, d.id, d.data() as never);
+          });
+        });
+      }
     } catch (err) {
       console.warn('Hydration from Cloud Firestore notice (offline/initial):', err);
     }
@@ -257,43 +266,59 @@ export async function createLiveBackend(): Promise<Backend> {
           });
         }
       }
-      // Real-time live Firestore synchronization for multi-device sync (Web <-> Desktop)
-      try {
-        onSnapshot(collection(db, 'dailyReports'), (snap) => {
-          if (!snap.empty) {
-            void store.transaction(async (tx) => {
-              snap.docChanges().forEach((c) => {
-                if (c.type === 'removed') {
-                  tx.delete(COL.dailyReports, c.doc.id);
-                } else {
-                  const rep = c.doc.data() as { employeeId?: string; workDate?: string; createdAt?: string };
-                  tx.set(COL.dailyReports, c.doc.id, rep as never);
-                  if (rep.employeeId && rep.workDate) {
-                    const k = dailyKey(rep.employeeId, rep.workDate);
-                    tx.set(COL.uniqueKeys, k, { id: k, ownerId: c.doc.id, createdAt: rep.createdAt || '' });
-                  }
-                }
-              });
-            });
-          }
-        });
+      persist();
+    }
 
-        onSnapshot(collection(db, 'dailyRoutines'), (snap) => {
-          if (!snap.empty) {
-            void store.transaction(async (tx) => {
-              snap.docChanges().forEach((c) => {
-                if (c.type === 'removed') {
-                  tx.delete(COL.dailyRoutines, c.doc.id);
-                } else {
-                  tx.set(COL.dailyRoutines, c.doc.id, c.doc.data() as never);
+    // Real-time live Firestore synchronization for multi-device sync (Web <-> Desktop)
+    try {
+      onSnapshot(collection(db, 'dailyReports'), (snap) => {
+        if (!snap.empty) {
+          void store.transaction(async (tx) => {
+            snap.docChanges().forEach((c) => {
+              if (c.type === 'removed') {
+                tx.delete(COL.dailyReports, c.doc.id);
+              } else {
+                const rep = c.doc.data() as { employeeId?: string; workDate?: string; createdAt?: string };
+                tx.set(COL.dailyReports, c.doc.id, rep as never);
+                if (rep.employeeId && rep.workDate) {
+                  const k = dailyKey(rep.employeeId, rep.workDate);
+                  tx.set(COL.uniqueKeys, k, { id: k, ownerId: c.doc.id, createdAt: rep.createdAt || '' });
                 }
-              });
+              }
             });
-          }
-        });
-      } catch (err) {
-        console.warn('Real-time listener setup non-fatal:', err);
-      }
+          });
+        }
+      });
+
+      onSnapshot(collection(db, 'dailyRoutines'), (snap) => {
+        if (!snap.empty) {
+          void store.transaction(async (tx) => {
+            snap.docChanges().forEach((c) => {
+              if (c.type === 'removed') {
+                tx.delete(COL.dailyRoutines, c.doc.id);
+              } else {
+                tx.set(COL.dailyRoutines, c.doc.id, c.doc.data() as never);
+              }
+            });
+          });
+        }
+      });
+
+      onSnapshot(collection(db, 'notifications'), (snap) => {
+        if (!snap.empty) {
+          void store.transaction(async (tx) => {
+            snap.docChanges().forEach((c) => {
+              if (c.type === 'removed') {
+                tx.delete(COL.notifications, c.doc.id);
+              } else {
+                tx.set(COL.notifications, c.doc.id, c.doc.data() as never);
+              }
+            });
+          });
+        }
+      });
+    } catch (err) {
+      console.warn('Real-time listener setup non-fatal:', err);
     }
     store.onChange = persist;
   };
@@ -412,8 +437,20 @@ export async function createLiveBackend(): Promise<Backend> {
       const session = readSession();
       const actor = session ? await store.get<UserDoc & { id: string }>(COL.users, session.uid) : null;
 
-      // Ensure fresh dailyReport and routines when loading My Day
-      if (actor && (op === 'daily.getForDate' || op === 'routine.get')) {
+      // Ensure fresh dailyReport, routines and notifications when loading
+      if (actor && (op === 'daily.getForDate' || op === 'routine.get' || op === 'notifications.list')) {
+        if (op === 'notifications.list') {
+          try {
+            const freshNotes = await getDocs(collection(db, 'notifications'));
+            await store.transaction(async (tx) => {
+              freshNotes.forEach((d) => {
+                tx.set(COL.notifications, d.id, d.data() as never);
+              });
+            });
+          } catch {
+            // Non-fatal
+          }
+        }
         const p = payload as { workDate?: string } | undefined;
         const workDate = p?.workDate;
         const targetKey = workDate ? dailyKey(actor.id, workDate) : null;

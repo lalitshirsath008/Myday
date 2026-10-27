@@ -51,7 +51,7 @@ const SAFETY_MS = 15 * 60_000;
 export function NotificationWatcher() {
   const me = useMe();
   const navigate = useNavigate();
-  const q = useOp('notifications.list', { unreadOnly: false, limit: 8 }, { refetchInterval: 30_000, refetchIntervalInBackground: true, staleTime: 15_000 });
+  const q = useOp('notifications.list', { unreadOnly: false, limit: 15 }, { refetchInterval: 10_000, refetchIntervalInBackground: true, staleTime: 5_000 });
   const markRead = useOpMutation('notifications.markRead', { invalidate: ['notifications.list'], silent: true });
   const [banners, setBanners] = useState<Banner[]>([]);
   const baseline = useRef<string | null>(null);
@@ -82,10 +82,11 @@ export function NotificationWatcher() {
       if (!fresh.length) return;
       if (desktop?.notify) {
         for (const b of fresh) desktop.notify({ id: b.id, title: b.title, body: b.body, link: b.link, sound: soundEnabled() });
-        return;
       }
       playChime();
-      setBanners((cur) => [...fresh, ...cur.filter((c) => !fresh.some((b) => b.key === c.key))].slice(0, MAX_BANNERS));
+      if (!desktop?.notify) {
+        setBanners((cur) => [...fresh, ...cur.filter((c) => !fresh.some((b) => b.key === c.key))].slice(0, MAX_BANNERS));
+      }
     },
     [desktop],
   );
@@ -126,7 +127,7 @@ export function NotificationWatcher() {
 
   useEffect(() => {
     const items = q.data?.items;
-    if (!items) return;
+    if (!items || !items.length) return;
     const newest = items.reduce((m, n) => (n.createdAt > m ? n.createdAt : m), '');
     const first = baseline.current === null;
     if (first) {
@@ -134,13 +135,16 @@ export function NotificationWatcher() {
       try {
         stored = localStorage.getItem(storeKey);
       } catch {
-        // No storage: nothing pops up on start-up, only later arrivals.
+        // No storage
       }
-      baseline.current = stored ?? newest;
+      baseline.current = stored ?? '';
     }
     const since = baseline.current ?? '';
-    const fresh = items.filter((n) => !n.read && n.createdAt > since && !announced.current.has(n.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (newest > since) {
+    const fresh = items
+      .filter((n) => !n.read && (since === '' || n.createdAt > since) && !announced.current.has(n.id))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    if (newest && newest > since) {
       baseline.current = newest;
       try {
         localStorage.setItem(storeKey, newest);
@@ -150,12 +154,8 @@ export function NotificationWatcher() {
     }
     if (!fresh.length) return;
 
-    if (first && fresh.length > 1) {
-      for (const n of fresh) announced.current.add(n.id);
-      announce([{ key: `sum-${newest}`, id: null, title: `${fresh.length} new notifications`, body: fresh.map((n) => n.title).slice(0, 3).join(' · '), link: '/notifications' }]);
-    } else {
-      announce(fresh.slice(0, MAX_BANNERS).map((n) => ({ key: n.id, id: n.id, title: n.title, body: n.body, link: n.link })));
-    }
+    for (const n of fresh) announced.current.add(n.id);
+    announce(fresh.slice(0, MAX_BANNERS).map((n) => ({ key: n.id, id: n.id, title: n.title, body: n.body, link: n.link })));
   }, [q.data, storeKey, announce]);
 
   // Auto-dismiss each banner after a few seconds (paused while hovered).

@@ -11,7 +11,7 @@ export const PANEL_NOTIFICATIONS = { unreadOnly: false, limit: 30 } as const;
 /** Notifications tab of the My day panel. In the desktop app, links open in the normal browser. */
 export function PanelNotifications({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
-  const q = useOp('notifications.list', PANEL_NOTIFICATIONS, { refetchInterval: 60_000, staleTime: 30_000 });
+  const q = useOp('notifications.list', PANEL_NOTIFICATIONS, { refetchInterval: 10_000, staleTime: 5_000, refetchOnWindowFocus: true });
   const markRead = useOpMutation('notifications.markRead', { invalidate: ['notifications.list'], silent: true });
   const unread = q.data?.unreadCount ?? 0;
 

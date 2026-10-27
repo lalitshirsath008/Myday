@@ -49,7 +49,7 @@ export function unlockAudioOnFirstGesture(): () => void {
 function ring(c: AudioContext) {
   const t0 = c.currentTime + 0.02;
   const master = c.createGain();
-  master.gain.value = 0.16;
+  master.gain.value = 0.35;
   master.connect(c.destination);
   // E6 → G6 → C7, each a sine with a quiet octave on top for a bell-like ring.
   const notes: [number, number][] = [
