@@ -36,7 +36,7 @@ import {
 import { ApiError, AuthFailure, type Backend, type Session } from './types';
 import { readFirebaseEnv } from './firebase';
 
-const DATA_KEY = 'rgk_worktrack_live_db_v3';
+const DATA_KEY = 'rgk_worktrack_live_db_v5';
 const SESSION_KEY = 'rgk_worktrack_live_session_v1';
 
 interface Persisted {
@@ -48,6 +48,15 @@ function loadLocal(): Persisted | null {
   try {
     try {
       localStorage.removeItem('rgk_worktrack_live_db_v1');
+      localStorage.removeItem('rgk_worktrack_live_db_v2');
+      localStorage.removeItem('rgk_worktrack_live_db_v3');
+      localStorage.removeItem('rgk_worktrack_live_db_v4');
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('rgk_worktrack_live_db_') && k !== DATA_KEY) {
+          localStorage.removeItem(k);
+        }
+      }
     } catch {
       // non-fatal
     }
@@ -312,73 +321,113 @@ export async function createLiveBackend(): Promise<Backend> {
     // Real-time live Firestore synchronization for multi-device sync (Web <-> Desktop)
     try {
       onSnapshot(collection(db, 'dailyReports'), (snap) => {
-        if (!snap.empty) {
-          isRemoteSync = true;
-          void store
-            .transaction(async (tx) => {
-              snap.docChanges().forEach((c) => {
-                if (c.type === 'removed') {
-                  tx.delete(COL.dailyReports, c.doc.id);
-                } else {
-                  const rep = c.doc.data() as { employeeId?: string; workDate?: string; createdAt?: string };
-                  tx.set(COL.dailyReports, c.doc.id, rep as never);
-                  if (rep.employeeId && rep.workDate) {
-                    const k = dailyKey(rep.employeeId, rep.workDate);
-                    tx.set(COL.uniqueKeys, k, { id: k, ownerId: c.doc.id, createdAt: rep.createdAt || '' });
-                  }
+        isRemoteSync = true;
+        void store
+          .transaction(async (tx) => {
+            if (snap.empty) {
+              const all = await store.query<Doc & { id: string }>(COL.dailyReports);
+              for (const l of all) {
+                tx.delete(COL.dailyReports, l.id);
+                if ((l as any).employeeId && (l as any).workDate) {
+                  tx.delete(COL.uniqueKeys, dailyKey((l as any).employeeId, (l as any).workDate));
                 }
-              });
-            })
-            .finally(() => {
-              isRemoteSync = false;
+              }
+              return;
+            }
+            snap.docChanges().forEach((c) => {
+              if (c.type === 'removed') {
+                tx.delete(COL.dailyReports, c.doc.id);
+                const l = c.doc.data() as any;
+                if (l?.employeeId && l?.workDate) {
+                  tx.delete(COL.uniqueKeys, dailyKey(l.employeeId, l.workDate));
+                }
+              } else {
+                const rep = c.doc.data() as { employeeId?: string; workDate?: string; createdAt?: string };
+                tx.set(COL.dailyReports, c.doc.id, rep as never);
+                if (rep.employeeId && rep.workDate) {
+                  const k = dailyKey(rep.employeeId, rep.workDate);
+                  tx.set(COL.uniqueKeys, k, { id: k, ownerId: c.doc.id, createdAt: rep.createdAt || '' });
+                }
+              }
             });
-        }
+          })
+          .finally(() => {
+            isRemoteSync = false;
+          });
       });
 
       onSnapshot(collection(db, 'dailyRoutines'), (snap) => {
-        if (!snap.empty) {
-          isRemoteSync = true;
-          void store
-            .transaction(async (tx) => {
-              snap.docChanges().forEach((c) => {
-                if (c.type === 'removed') {
-                  tx.delete(COL.dailyRoutines, c.doc.id);
-                } else {
-                  tx.set(COL.dailyRoutines, c.doc.id, c.doc.data() as never);
-                }
-              });
-            })
-            .finally(() => {
-              isRemoteSync = false;
+        isRemoteSync = true;
+        void store
+          .transaction(async (tx) => {
+            if (snap.empty) {
+              const all = await store.query<Doc & { id: string }>(COL.dailyRoutines);
+              for (const r of all) tx.delete(COL.dailyRoutines, r.id);
+              return;
+            }
+            snap.docChanges().forEach((c) => {
+              if (c.type === 'removed') {
+                tx.delete(COL.dailyRoutines, c.doc.id);
+              } else {
+                tx.set(COL.dailyRoutines, c.doc.id, c.doc.data() as never);
+              }
             });
-        }
+          })
+          .finally(() => {
+            isRemoteSync = false;
+          });
+      });
+
+      onSnapshot(collection(db, 'tasks'), (snap) => {
+        isRemoteSync = true;
+        void store
+          .transaction(async (tx) => {
+            if (snap.empty) {
+              const all = await store.query<Doc & { id: string }>(COL.tasks);
+              for (const t of all) tx.delete(COL.tasks, t.id);
+              return;
+            }
+            snap.docChanges().forEach((c) => {
+              if (c.type === 'removed') {
+                tx.delete(COL.tasks, c.doc.id);
+              } else {
+                tx.set(COL.tasks, c.doc.id, c.doc.data() as never);
+              }
+            });
+          })
+          .finally(() => {
+            isRemoteSync = false;
+          });
       });
 
       onSnapshot(collection(db, 'notifications'), (snap) => {
-        if (!snap.empty) {
-          const freshDocs: any[] = [];
-          isRemoteSync = true;
-          void store
-            .transaction(async (tx) => {
-              snap.docChanges().forEach((c) => {
-                if (c.type === 'removed') {
-                  tx.delete(COL.notifications, c.doc.id);
-                } else {
-                  const d = c.doc.data();
-                  tx.set(COL.notifications, c.doc.id, d as never);
-                  if (c.type === 'added' || c.type === 'modified') {
-                    freshDocs.push({ ...d, id: c.doc.id });
-                  }
+        const freshDocs: any[] = [];
+        isRemoteSync = true;
+        void store
+          .transaction(async (tx) => {
+            if (snap.empty) {
+              const all = await store.query<Doc & { id: string }>(COL.notifications);
+              for (const n of all) tx.delete(COL.notifications, n.id);
+              return;
+            }
+            snap.docChanges().forEach((c) => {
+              if (c.type === 'removed') {
+                tx.delete(COL.notifications, c.doc.id);
+              } else {
+                const d = c.doc.data();
+                tx.set(COL.notifications, c.doc.id, d as never);
+                if (c.type === 'added' || c.type === 'modified') {
+                  freshDocs.push({ ...d, id: c.doc.id });
                 }
-              });
-            })
-            .finally(() => {
-              isRemoteSync = false;
-              if (freshDocs.length > 0) {
-                window.dispatchEvent(new CustomEvent('rgk:notifications-synced', { detail: { items: freshDocs } }));
               }
             });
-        }
+          })
+          .finally(() => {
+            isRemoteSync = false;
+            if (freshDocs.length > 0) {
+              window.dispatchEvent(new CustomEvent('rgk:notifications-synced', { detail: { items: freshDocs } }));
+            }
+          });
       });
     } catch (err) {
       console.warn('Real-time listener setup non-fatal:', err);

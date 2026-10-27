@@ -74,9 +74,20 @@ function createTab() {
   tab.setAlwaysOnTop(true, 'screen-saver');
   tab.setVisibleOnAllWorkspaces(true);
   placeTab();
+
+  const showTab = () => {
+    if (!readSettings().tabHidden && tab && !tab.isDestroyed()) {
+      tab.showInactive();
+    }
+  };
+
+  tab.once('ready-to-show', showTab);
+  tab.webContents.on('did-finish-load', () => {
+    sendTabState();
+    showTab();
+  });
   tab.loadFile(path.join(__dirname, 'tab.html'));
-  tab.webContents.on('did-finish-load', () => sendTabState());
-  tab.once('ready-to-show', () => !readSettings().tabHidden && tab.showInactive());
+  setTimeout(showTab, 500);
 }
 
 function panelBounds() {
@@ -491,6 +502,9 @@ if (!app.requestSingleInstanceLock()) {
     createBanner();
     createStrip();
     buildTray();
+    setTimeout(() => {
+      showPanel();
+    }, 500);
     powerMonitor.on('resume', () => offline() && panel.loadURL(PANEL_URL));
     screen.on('display-metrics-changed', () => {
       placeTab();
