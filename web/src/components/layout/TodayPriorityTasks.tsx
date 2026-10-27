@@ -41,9 +41,9 @@ export function TodayPriorityTasks({ onNavigate }: { onNavigate?: () => void }) 
   const restDay = d && !d.workingDay.isWorkingDay && !report;
 
   return (
-    <section className="px-4 pt-4" aria-labelledby="priority-heading">
+    <section className="px-4 pt-3" aria-labelledby="priority-heading">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 id="priority-heading" className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 id="priority-heading" className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           Today’s {PRIORITY_SLOTS} priority tasks
         </h3>
         {returned ? (
@@ -61,9 +61,9 @@ export function TodayPriorityTasks({ onNavigate }: { onNavigate?: () => void }) 
 
       {q.isPending ? (
         <div className="space-y-2" role="status" aria-label="Loading priority tasks">
-          <Skeleton className="h-14 rounded-2xl" />
-          <Skeleton className="h-14 rounded-2xl" />
-          <Skeleton className="h-14 rounded-2xl" />
+          <Skeleton className="h-12 rounded-xl" />
+          <Skeleton className="h-12 rounded-xl" />
+          <Skeleton className="h-12 rounded-xl" />
         </div>
       ) : q.isError ? (
         <p className="rounded-2xl bg-danger-soft px-3 py-2.5 text-[12px] text-danger" role="alert">
@@ -77,42 +77,42 @@ export function TodayPriorityTasks({ onNavigate }: { onNavigate?: () => void }) 
           {d.workingDay.exceptionName ?? d.workingDay.reason} — no daily report needed today.
         </p>
       ) : (
-        <ol className="space-y-2">
+        <ol className="space-y-1.5">
           {Array.from({ length: PRIORITY_SLOTS }, (_, i) => {
             const t = primary[i];
             const done = t?.status === 'COMPLETED';
             if (!t?.title.trim()) {
               return (
-                <li key={i} className="flex items-center gap-3 rounded-2xl border border-dashed px-3 py-2.5">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-muted-foreground">{i + 1}</span>
-                  <span className="text-[13px] text-muted-foreground">Task {i + 1} · not filled yet</span>
+                <li key={i} className="flex items-center gap-2.5 rounded-xl border border-dashed px-3 py-2">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
+                  <span className="text-[12.5px] text-muted-foreground">Task {i + 1} · not filled yet</span>
                 </li>
               );
             }
             const time = t.plannedStartTime ? `${fmtTime(t.plannedStartTime)}${t.plannedEndTime ? ` – ${fmtTime(t.plannedEndTime)}` : ''}` : null;
             return (
-              <li key={i} className={cn('rounded-2xl border px-3 py-2.5', done ? 'border-success/30 bg-success-soft/40' : 'bg-card')}>
-                <div className="flex items-start gap-3">
+              <li key={i} className={cn('rounded-xl border px-3 py-2', done ? 'border-success/30 bg-success-soft/40' : 'bg-card')}>
+                <div className="flex items-start gap-2.5">
                   <span
                     className={cn(
-                      'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
+                      'mt-px flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-medium',
                       done ? 'bg-success text-white dark:text-black' : 'bg-brand-soft text-brand',
                     )}
                     aria-hidden
                   >
-                    {done ? <Check className="size-4" strokeWidth={3} /> : i + 1}
+                    {done ? <Check className="size-3.5" strokeWidth={3} /> : i + 1}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="sr-only">Task {i + 1}: </span>
-                    <span className="block break-words text-[14px] font-medium leading-snug">{t.title}</span>
-                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
-                      <StatusBadge status={t.status} className="px-2 py-0.5 text-[11px]" />
+                    <span className="block break-words text-[13.5px] leading-snug">{t.title}</span>
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-muted-foreground">
+                      <StatusBadge status={t.status} className="px-1.5 py-0.5 text-[10.5px]" />
                       {time && <span>{time}</span>}
                     </span>
                   </span>
-                  <span className="shrink-0 pt-0.5 text-[12px] font-semibold tabular-nums text-muted-foreground">{t.progressPercentage}%</span>
+                  <span className="shrink-0 pt-0.5 text-[11.5px] font-medium tabular-nums text-muted-foreground">{t.progressPercentage}%</span>
                 </div>
-                <div className="ml-10 mt-2 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                <div className="ml-[34px] mt-1.5 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
                   <div className={cn('h-full rounded-full', done ? 'bg-success' : 'bg-brand')} style={{ width: `${t.progressPercentage}%` }} />
                 </div>
               </li>
@@ -125,7 +125,7 @@ export function TodayPriorityTasks({ onNavigate }: { onNavigate?: () => void }) 
         <PageLink
           to="/daily/today"
           onNavigate={onNavigate}
-          className="tap mt-2 flex items-center justify-center gap-1.5 rounded-xl py-2 text-[13px] font-semibold text-primary hover:bg-brand-soft"
+          className="tap mt-1 flex items-center justify-center gap-1.5 rounded-xl py-1.5 text-[13px] font-medium text-primary hover:bg-brand-soft"
         >
           {submitted && !returned ? (
             <>

@@ -66,36 +66,34 @@ export function DesktopAppOffer() {
   };
 
   return (
-    <div className="mx-4 mb-3 animate-fade-up rounded-2xl border bg-gradient-to-br from-brand-soft to-card p-3.5">
-      <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Monitor className="size-5" aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-semibold leading-tight">My day on your desktop</p>
-          <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">Keep this tab on your laptop screen, over every app. Same list, always in sync.</p>
-        </div>
-        <button type="button" onClick={hide} aria-label="Hide desktop app offer" className="-mr-1 -mt-1 flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
-          <X className="size-4" aria-hidden />
+    <div className="mx-4 mb-2 animate-fade-up rounded-xl border bg-gradient-to-r from-brand-soft to-card px-3 py-2">
+      <div className="flex items-center gap-2.5">
+        <Monitor className="size-4 shrink-0 text-brand" aria-hidden />
+        <p className="min-w-0 flex-1 truncate text-[12.5px]" title="Keep this tab on your laptop screen, over every app. Same list, always in sync.">
+          My day on your desktop
+        </p>
+        <a
+          href={`/downloads/${m.file}`}
+          download={m.file}
+          onClick={() => setStarted(true)}
+          aria-label={`Download the Windows app (${Math.round(m.size / 1_048_576)} MB)`}
+          className={cn(buttonVariants({ size: 'sm' }), 'h-7 shrink-0 rounded-lg px-2.5 text-[12px]')}
+        >
+          <Download /> {started ? 'Again' : 'Download'}
+        </a>
+        <button type="button" onClick={hide} aria-label="Hide desktop app offer" className="-mr-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
+          <X className="size-3.5" aria-hidden />
         </button>
       </div>
       {started ? (
-        <ol className="mt-3 list-decimal space-y-1 pl-5 text-[12px] leading-snug text-foreground/85" aria-live="polite">
+        <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-[11.5px] leading-snug text-foreground/85" aria-live="polite">
           <li>Open the downloaded file ({m.file}).</li>
           <li>
             If Windows says “Windows protected your PC”, click <b>More info</b> → <b>Run anyway</b>.
           </li>
-          <li>Sign in once with your usual details. The orange tab appears on the right edge of your screen.</li>
+          <li>Sign in once. The orange tab appears on the right edge of your screen.</li>
         </ol>
       ) : null}
-      <a
-        href={`/downloads/${m.file}`}
-        download={m.file}
-        onClick={() => setStarted(true)}
-        className={cn(buttonVariants({ size: 'sm' }), 'mt-3 w-full')}
-      >
-        <Download /> {started ? 'Download again' : 'Download for Windows'} · {Math.round(m.size / 1_048_576)} MB
-      </a>
     </div>
   );
 }

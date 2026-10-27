@@ -13,7 +13,7 @@ import { LoginPage } from '@/pages/auth/LoginPage';
 import { ActivatePage, ForgotPasswordPage, RegisterPage, ResetPasswordPage } from '@/pages/auth/OtherAuthPages';
 import { DailyEntryPage } from '@/pages/employee/DailyEntryPage';
 import { DashboardPage } from '@/pages/employee/DashboardPage';
-import { CalendarPage, MyAnalyticsPage, MyProjectsPage, NotificationsPage, ProfilePage } from '@/pages/employee/PersonalPages';
+import { MyAnalyticsPage, MyProjectsPage, NotificationsPage, ProfilePage } from '@/pages/employee/PersonalPages';
 import { DailyReportDetailPage, DailyReportListPage, WeeklyReportListPage } from '@/pages/employee/ReportPages';
 import { WeeklyCreatePage, WeeklyDetailPage } from '@/pages/employee/WeeklyPages';
 import { ManagerDashboardPage, PendingReviewsPage, TeamAnalyticsPage, TeamListPage } from '@/pages/manager/ManagerPages';
@@ -28,6 +28,7 @@ import {
   ProjectDetailPage,
 } from '@/pages/management/ManagementPages';
 import { EmployeeDetailPage } from '@/pages/shared/EmployeeDetailPage';
+import { WorkCalendarPage } from '@/pages/shared/WorkCalendarPage';
 import { WidgetMyDayPage } from '@/pages/WidgetMyDayPage';
 
 function RequireAuth() {
@@ -107,7 +108,7 @@ export const router = createBrowserRouter([
       { path: '/my/analytics', element: <Allow reporter><MyAnalyticsPage /></Allow> },
       { path: '/notifications', element: <NotificationsPage /> },
       { path: '/profile', element: <ProfilePage /> },
-      { path: '/calendar', element: <CalendarPage /> },
+      { path: '/calendar', element: <WorkCalendarPage /> },
       // Reporting Manager
       { path: '/manager', element: <Allow roles={MGR}><ManagerDashboardPage /></Allow> },
       { path: '/team', element: <Allow roles={MGR}><TeamListPage /></Allow> },

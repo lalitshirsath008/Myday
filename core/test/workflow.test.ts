@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { dispatch } from '../src/ops';
 import { COL, type AuditLogDoc, type NotificationDoc, type ReportVersionDoc, type UserDoc } from '../src/types';
 import { DEMO_PASSWORD } from '../src/seed';
-import { expectCode, makeWorld, task, type World } from './helpers';
+import { expectCode, makeWorld, task, threeTasks, type World } from './helpers';
 
 const TODAY = '2025-10-25'; // Saturday, a working day under the default policy
 
-async function submitToday(w: World, key: string, tasks = [task(), task({ title: 'Line 2 changeover', status: 'COMPLETED', progressPercentage: 100 })]) {
+async function submitToday(w: World, key: string, tasks = [task(), task({ title: 'Line 2 changeover', status: 'COMPLETED', progressPercentage: 100 }), task({ title: 'Quality check on batch 7' })]) {
   return w.call(key, 'daily.save', { workDate: TODAY, tasks, employeeNotes: '', submit: true, expectedRevision: null });
 }
 
@@ -151,23 +151,26 @@ describe('Scenario A + B: daily reporting and manager review', () => {
     const first = await submitToday(w, 'e1');
     // A second "new" submission and a stale edit are both rejected.
     await expectCode(submitToday(w, 'e1'), 'failed-precondition');
-    await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task()], employeeNotes: '', submit: true, expectedRevision: first.report.revision - 1 }), 'failed-precondition');
+    await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: threeTasks(), employeeNotes: '', submit: true, expectedRevision: first.report.revision - 1 }), 'failed-precondition');
     const again = await w.call('e1', 'daily.getForDate', { workDate: TODAY });
     expect(again.editable).toBe(false);
   });
 
   it('rejects invalid tasks, future dates and inactive collaborators', async () => {
-    await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task({ plannedStartTime: '12:00', plannedEndTime: '10:00' })], employeeNotes: '', submit: true, expectedRevision: null }), 'invalid-argument');
+    await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: threeTasks(task({ plannedStartTime: '12:00', plannedEndTime: '10:00' })), employeeNotes: '', submit: true, expectedRevision: null }), 'invalid-argument');
     await expectCode(w.call('e1', 'daily.save', { workDate: '2025-10-26', tasks: [task()], employeeNotes: '', submit: true, expectedRevision: null }), 'invalid-argument');
     await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task(), task(), task(), task()], employeeNotes: '', submit: true, expectedRevision: null }), 'invalid-argument');
+    // All 3 priority tasks are required to submit (a draft can be saved with fewer).
+    await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task(), task()], employeeNotes: '', submit: true, expectedRevision: null }), 'invalid-argument');
+    await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task(), task({ title: '  ' }), task()], employeeNotes: '', submit: true, expectedRevision: null }), 'invalid-argument');
     await w.call('admin', 'admin.users.setStatus', { userId: w.id('e6'), status: 'DEACTIVATED', reason: 'test' });
-    await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task({ collaboratorIds: [w.id('e6')] })], employeeNotes: '', submit: true, expectedRevision: null }), 'invalid-argument');
+    await expectCode(w.call('e1', 'daily.save', { workDate: TODAY, tasks: threeTasks(task({ collaboratorIds: [w.id('e6')] })), employeeNotes: '', submit: true, expectedRevision: null }), 'invalid-argument');
     await expectCode(w.call('mgmt', 'daily.save', { workDate: TODAY, tasks: [task()], employeeNotes: '', submit: true, expectedRevision: null }), 'permission-denied');
   });
 
   it('marks reports submitted after the deadline as late', async () => {
     w.clock.now = w.at('2025-10-26', '09:00');
-    const r = await w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task()], employeeNotes: '', submit: true, expectedRevision: null });
+    const r = await w.call('e1', 'daily.save', { workDate: TODAY, tasks: threeTasks(), employeeNotes: '', submit: true, expectedRevision: null });
     expect(r.report.submittedLate).toBe(true);
   });
 });
@@ -234,14 +237,14 @@ describe('Scenario C: weekly report', () => {
     // Week of Mon 20 Oct: Wednesday 22 is the weekly holiday → 6 working days.
     for (const [date, at] of [['2025-10-20', '18:00'], ['2025-10-21', '18:00'], ['2025-10-23', '18:00']] as const) {
       w.clock.now = w.at(date, at);
-      await w.call('e1', 'daily.save', { workDate: date, tasks: [task(), task({ title: 'Done', status: 'COMPLETED', progressPercentage: 100 })], employeeNotes: '', submit: true, expectedRevision: null });
+      await w.call('e1', 'daily.save', { workDate: date, tasks: [task(), task({ title: 'Done', status: 'COMPLETED', progressPercentage: 100 }), task({ title: 'Quality check on batch 7' })], employeeNotes: '', submit: true, expectedRevision: null });
     }
     w.clock.now = w.at('2025-10-25', '10:00');
     const preview = await w.call('e1', 'weekly.preview', { periodStart: '2025-10-20' });
     expect(preview.summary.workingDays).toBe(6);
     expect(preview.summary.workingDates).not.toContain('2025-10-22');
     expect(preview.summary.dailyReportsSubmitted).toBe(3);
-    expect(preview.summary.tasksPlanned).toBe(6);
+    expect(preview.summary.tasksPlanned).toBe(9);
     expect(preview.summary.tasksCompleted).toBe(3);
     expect(preview.summary.missingReportDates).toEqual(['2025-10-24']);
     // Last working day of the week is Sunday 26 → cannot submit yet on Saturday.
@@ -290,7 +293,7 @@ describe('Scenario G: administrator correction', () => {
   it('moves a report to the correct date, keeps the original version and audit trail, and requires re-review', async () => {
     const w = await makeWorld();
     w.clock.now = w.at('2025-10-24', '18:00');
-    const sub = await w.call('e1', 'daily.save', { workDate: '2025-10-24', tasks: [task()], employeeNotes: '', submit: true, expectedRevision: null });
+    const sub = await w.call('e1', 'daily.save', { workDate: '2025-10-24', tasks: threeTasks(), employeeNotes: '', submit: true, expectedRevision: null });
     await w.call('rm1', 'review.act', { reportType: 'DAILY', reportId: sub.report.id, action: 'APPROVED', comment: '', reportVersion: 1 });
     w.clock.now = w.at('2025-10-25', '10:00');
     await expectCode(w.call('e1', 'admin.daily.correct', { reportId: sub.report.id, workDate: '2025-10-23', reason: 'Wrong date', expectedVersion: 1 }), 'permission-denied');
@@ -440,6 +443,31 @@ describe('daily routine (personal tasks besides the 3 priorities)', () => {
     // Past days are read-only.
     expect((await w.call('e1', 'routine.get', { date: '2025-10-25' })).editable).toBe(false);
     await expectCode(w.call('e1', 'routine.save', { items: [{ id: 'x', text: '', time: null, done: false, repeat: false }] }), 'invalid-argument');
+  });
+});
+
+describe('Outlook-style calendar', () => {
+  it('shows my tasks and My day items, shows a manager only submitted work, and keeps others out', async () => {
+    const w = await makeWorld();
+    const draft = await w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task({ title: 'Fixture trial', plannedStartTime: '09:00', plannedEndTime: '11:00' })], employeeNotes: '', submit: false, expectedRevision: null });
+    await w.call('e1', 'routine.save', { items: [{ id: 'r1', text: 'Shop-floor round', time: '08:30', done: false, repeat: false }] });
+    const mine = await w.call('e1', 'calendar.events', { from: '2025-10-20', to: '2025-10-26', employeeId: null });
+    expect(mine.isSelf).toBe(true);
+    expect(mine.days).toHaveLength(7);
+    expect(mine.tasks.filter((t) => t.workDate === TODAY).map((t) => [t.title, t.plannedStartTime])).toEqual([['Fixture trial', '09:00']]);
+    expect(mine.routine).toEqual([{ date: TODAY, id: 'r1', text: 'Shop-floor round', time: '08:30', done: false }]);
+    // The manager sees the draft only once it is submitted, and never the My day list.
+    const before = await w.call('rm1', 'calendar.events', { from: TODAY, to: TODAY, employeeId: w.id('e1') });
+    expect(before.tasks).toHaveLength(0);
+    expect(before.routine).toHaveLength(0);
+    await w.call('e1', 'daily.save', { workDate: TODAY, tasks: threeTasks(task({ title: 'Fixture trial' })), employeeNotes: '', submit: true, expectedRevision: draft.report.revision });
+    const after = await w.call('rm1', 'calendar.events', { from: TODAY, to: TODAY, employeeId: w.id('e1') });
+    expect(after.tasks.length).toBeGreaterThan(0);
+    expect(after.routine).toHaveLength(0);
+    // Outside the viewer's scope, and over-long ranges, are refused.
+    await expectCode(w.call('e2', 'calendar.events', { from: TODAY, to: TODAY, employeeId: w.id('e1') }), 'permission-denied');
+    await expectCode(w.call('rm2', 'calendar.events', { from: TODAY, to: TODAY, employeeId: w.id('e1') }), 'permission-denied');
+    await expectCode(w.call('e1', 'calendar.events', { from: '2025-09-01', to: '2025-10-26', employeeId: null }), 'invalid-argument');
   });
 });
 

@@ -73,6 +73,11 @@ export function task(overrides: Partial<TaskInput> = {}): TaskInput {
   };
 }
 
+/** Three filled priority tasks: a daily report needs all three to be submitted. `first` replaces task 1. */
+export function threeTasks(first: TaskInput = task()): TaskInput[] {
+  return [first, task({ title: 'Line 2 changeover', plannedStartTime: '11:00', plannedEndTime: '13:00' }), task({ title: 'Quality check on batch 7', plannedStartTime: '14:00', plannedEndTime: '16:00' })];
+}
+
 export async function expectCode(p: Promise<unknown>, code: string): Promise<void> {
   try {
     await p;

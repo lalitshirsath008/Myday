@@ -293,7 +293,7 @@ async function generateHistory(args: {
       const isToday = date === today;
       if (!isToday && rand() < 0.1) continue; // occasional missed report
       const items = WORK[ek]!;
-      const count = Math.min(items.length, rand() < 0.4 ? 2 : 3);
+      const count = 3; // a report can only be submitted with all 3 priority tasks
       const offset = Math.floor(rand() * items.length);
       const tasks: TaskInput[] = [];
       for (let i = 0; i < count; i++) {

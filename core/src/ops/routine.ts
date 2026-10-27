@@ -34,7 +34,7 @@ const itemInput = z.object({
   repeat: z.boolean().default(false),
 });
 
-const routineId = (userId: string, date: string) => `${userId}_${date}`;
+export const routineId = (userId: string, date: string) => `${userId}_${date}`;
 
 export const routineOps = {
   /**

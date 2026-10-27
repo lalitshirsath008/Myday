@@ -551,12 +551,3 @@ export function CalendarView({ admin, departmentId }: { admin?: boolean; departm
     </Card>
   );
 }
-
-export function CalendarPage() {
-  return (
-    <div className="mx-auto max-w-xl space-y-4">
-      <PageHeader title="Work calendar" description="Tap a date for details" />
-      <CalendarView />
-    </div>
-  );
-}

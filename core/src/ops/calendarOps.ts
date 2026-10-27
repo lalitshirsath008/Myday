@@ -1,16 +1,73 @@
 import { z } from 'zod';
 import { dailyDeadline, policyFor, resolveWorkingDay } from '../calendar';
-import { dateRange, monthBounds, todayIn } from '../dates';
+import { dateRange, diffDays, monthBounds, todayIn } from '../dates';
 import { AppError, invalid, notFound, precondition } from '../errors';
 import { dateStr } from '../schemas';
 import { withSettingsDefaults } from '../settings';
-import { COL, type CalendarExceptionDoc, type SystemSettings } from '../types';
+import { COL, type CalendarExceptionDoc, type DailyReportDoc, type SystemSettings } from '../types';
 import { nowIso, op, requirePermission } from './context';
-import { audit, getExceptions, getSettings, SETTINGS_ID } from './helpers';
+import { audit, getExceptions, getSettings, getViewableEmployee, projectsById, SETTINGS_ID } from './helpers';
+import { type RoutineDoc, routineId } from './routine';
 
 const exceptionId = (date: string, departmentId: string | null) => `${date}_${departmentId ?? 'ALL'}`;
 
 export const calendarOps = {
+  /**
+   * Outlook-style calendar for a date range (up to 6 weeks): working days, the person's daily-report
+   * tasks and, on your own calendar, your private My day items. Someone else's calendar (within the
+   * viewer's normal scope) shows submitted reports only and never their My day list.
+   */
+  'calendar.events': op({
+    input: z.object({ from: dateStr, to: dateStr, employeeId: z.string().min(1).nullable().default(null) }),
+    run: async (ctx, { from, to, employeeId }) => {
+      if (to < from) throw invalid('The end date must be on or after the start date.');
+      if (diffDays(from, to) > 41) throw invalid('Choose a range of 6 weeks or less.');
+      const settings = await getSettings(ctx);
+      const isSelf = !employeeId || employeeId === ctx.actor.id;
+      const person = isSelf ? ctx.actor : await getViewableEmployee(ctx, employeeId);
+      const dates = dateRange(from, to);
+      const [exceptions, reports, routines] = await Promise.all([
+        getExceptions(ctx, from, to),
+        ctx.store.query<DailyReportDoc & { id: string }>(COL.dailyReports, { where: [['employeeId', '==', person.id], ['workDate', '>=', from], ['workDate', '<=', to]] }),
+        isSelf ? ctx.store.getMany<RoutineDoc & { id: string }>(COL.dailyRoutines, dates.map((d) => routineId(person.id, d))) : Promise.resolve([]),
+      ]);
+      const visible = isSelf ? reports : reports.filter((r) => r.submissionStatus === 'SUBMITTED');
+      const projects = await projectsById(ctx, visible.flatMap((r) => r.tasks.map((t) => t.projectId)));
+      return {
+        from,
+        to,
+        today: todayIn(settings.timezone, ctx.now()),
+        person: { id: person.id, fullName: person.fullName, employeeCode: person.employeeCode },
+        isSelf,
+        days: dates.map((date) => ({ date, ...resolveWorkingDay(date, settings.calendarPolicies, exceptions, person.departmentId) })),
+        reports: visible.map((r) => ({ id: r.id, workDate: r.workDate, submissionStatus: r.submissionStatus, reviewStatus: r.reviewStatus })),
+        tasks: visible.flatMap((r) =>
+          r.tasks
+            .filter((t) => t.title.trim())
+            .map((t) => ({
+              reportId: r.id,
+              workDate: r.workDate,
+              slot: t.slot,
+              isPrimary: t.isPrimary,
+              title: t.title,
+              description: t.description,
+              status: t.status,
+              priority: t.priority,
+              progressPercentage: t.progressPercentage,
+              plannedStartTime: t.plannedStartTime,
+              plannedEndTime: t.plannedEndTime,
+              actualStartTime: t.actualStartTime,
+              actualEndTime: t.actualEndTime,
+              overnight: t.overnight,
+              projectName: t.projectId ? (projects.get(t.projectId)?.name ?? null) : null,
+              collaborators: t.collaboratorIds.length,
+            })),
+        ),
+        routine: routines.flatMap((d) => d.items.map((i) => ({ date: d.date, id: i.id, text: i.text, time: i.time, done: i.done }))),
+      };
+    },
+  }),
+
   'calendar.month': op({
     input: z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), departmentId: z.string().nullable().default(null) }),
     run: async (ctx, { month, departmentId }) => {
