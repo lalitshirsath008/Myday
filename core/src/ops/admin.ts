@@ -172,7 +172,11 @@ const settingsUpdateInput = z
     dailyGraceMinutes: z.number().int().min(0).max(24 * 60),
     weeklyDeadlineDayOffset: z.number().int().min(0).max(7),
     weeklyDeadlineTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-    reminderTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    reminderTimes: z
+      .array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/))
+      .min(1)
+      .max(6)
+      .transform((t) => [...new Set(t)].sort()),
     primaryTaskSlots: z.number().int().min(1).max(5),
     minTasksForSubmission: z.number().int().min(1).max(5),
     allowAdditionalTasks: z.boolean(),

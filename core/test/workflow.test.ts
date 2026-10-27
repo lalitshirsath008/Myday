@@ -371,10 +371,10 @@ describe('Scenarios D, E and I: management analytics on generated history', () =
 });
 
 describe('notifications and reminders', () => {
-  it('sends deadline reminders once per employee per day', async () => {
+  it('sends deadline reminders once per employee per reminder time', async () => {
     const w = await makeWorld();
     await submitToday(w, 'e1');
-    w.clock.now = w.at(TODAY, '18:05');
+    w.clock.now = w.at(TODAY, '18:35');
     const first = await w.call('admin', 'admin.runReminders', { force: false });
     expect(first.ran).toBe(true);
     // 2 managers + 6 employees report; e1 already submitted.
@@ -387,10 +387,37 @@ describe('notifications and reminders', () => {
     expect((await w.call('e2', 'notifications.list', { unreadOnly: true })).unreadCount).toBe(0);
   });
 
+  it('reminds me four times a day to complete my 3 priority tasks until the report is submitted', async () => {
+    const w = await makeWorld();
+    w.clock.now = w.at(TODAY, '09:00');
+    const early = await w.call('e1', 'me.checkReminders', {});
+    expect(early).toEqual({ notification: null, nextCheckAt: w.at(TODAY, '10:00').toISOString() });
+    w.clock.now = w.at(TODAY, '10:05');
+    const first = await w.call('e1', 'me.checkReminders', {});
+    expect(first.notification).toMatchObject({ title: 'Complete your 3 priority tasks', body: expect.stringMatching(/^0 of 3 filled/), link: '/daily/today' });
+    expect(first.nextCheckAt).toBe(w.at(TODAY, '13:00').toISOString());
+    // The same reminder time never fires twice, even if the scheduled job also runs.
+    expect((await w.call('e1', 'me.checkReminders', {})).notification).toBeNull();
+    expect((await w.call('admin', 'admin.runReminders', { force: false })).deadlineReminders).toBe(7);
+    // Next reminder time: a new reminder that reflects progress.
+    const draft = await w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task()], employeeNotes: '', submit: false, expectedRevision: null });
+    w.clock.now = w.at(TODAY, '13:02');
+    expect((await w.call('e1', 'me.checkReminders', {})).notification?.body).toMatch(/^1 of 3 filled/);
+    // Submitted: no more reminders today.
+    await w.call('e1', 'daily.save', { workDate: TODAY, tasks: threeTasks(), employeeNotes: '', submit: true, expectedRevision: draft.report.revision });
+    w.clock.now = w.at(TODAY, '16:01');
+    expect(await w.call('e1', 'me.checkReminders', {})).toEqual({ notification: null, nextCheckAt: null });
+    const reminders = (await w.call('e1', 'notifications.list', { unreadOnly: false, limit: 50 })).items.filter((n) => n.type === 'DEADLINE_UPCOMING');
+    expect(reminders).toHaveLength(2);
+    // Management does not report, so is never reminded.
+    expect((await w.call('mgmt', 'me.checkReminders', {})).notification).toBeNull();
+  });
+
   it('does not remind on a holiday', async () => {
     const w = await makeWorld({ now: new Date('2025-10-22T12:30:00.000Z') }); // Wednesday 18:00 IST
     const r = await w.call('admin', 'admin.runReminders', { force: true });
     expect(r.deadlineReminders).toBe(0);
+    expect((await w.call('e1', 'me.checkReminders', {})).notification).toBeNull();
   });
 });
 
@@ -443,6 +470,20 @@ describe('daily routine (personal tasks besides the 3 priorities)', () => {
     // Past days are read-only.
     expect((await w.call('e1', 'routine.get', { date: '2025-10-25' })).editable).toBe(false);
     await expectCode(w.call('e1', 'routine.save', { items: [{ id: 'x', text: '', time: null, done: false, repeat: false }] }), 'invalid-argument');
+  });
+});
+
+describe('collaborator notifications', () => {
+  it('notifies a person once when added to a task, and only the newly added people later', async () => {
+    const w = await makeWorld();
+    const mine = (key: string) => w.call(key, 'notifications.list', { unreadOnly: false, limit: 50 }).then((r) => r.items.filter((n) => n.type === 'COLLABORATOR_ADDED'));
+    const first = await w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task({ title: 'Fixture trial', collaboratorIds: [w.id('e2')] })], employeeNotes: '', submit: false, expectedRevision: null });
+    expect((await mine('e2')).map((n) => n.body)).toEqual([`Rohan Patil (Test) added you to “Fixture trial” on ${TODAY}.`]);
+    // Saving again with the same people does not notify again; adding someone notifies only them.
+    await w.call('e1', 'daily.save', { workDate: TODAY, tasks: [task({ title: 'Fixture trial', collaboratorIds: [w.id('e2'), w.id('e3')] })], employeeNotes: '', submit: false, expectedRevision: first.report.revision });
+    expect(await mine('e2')).toHaveLength(1);
+    expect(await mine('e3')).toHaveLength(1);
+    expect(await mine('e1')).toHaveLength(0);
   });
 });
 

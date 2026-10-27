@@ -234,7 +234,7 @@ export function WeeklyDetailPage({ mode }: { mode: 'own' | 'review' | 'admin' })
   if (q.isLoading) return <PageSkeleton />;
   if (q.error || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   const { report, employee } = q.data;
-  const back = mode === 'review' ? { to: '/reviews/weekly', label: 'Weekly report reviews' } : mode === 'admin' ? { to: '/admin/reports/weekly', label: 'Weekly report administration' } : { to: '/reports/weekly', label: 'Weekly history' };
+  const back = mode === 'review' ? { to: '/reviews/weekly', label: 'Team reports' } : mode === 'admin' ? { to: '/admin/reports/weekly', label: 'Reports' } : { to: '/reports/weekly', label: 'Report history' };
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <PageHeader

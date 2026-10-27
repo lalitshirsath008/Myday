@@ -20,6 +20,8 @@
     "files": [
       "main.cjs",
       "tab.html",
+      "banner-preload.cjs",
+      "banner.html",
       "tab-preload.cjs",
       "panel-preload.cjs",
       "config.json",

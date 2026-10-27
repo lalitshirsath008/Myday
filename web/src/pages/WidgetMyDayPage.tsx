@@ -2,14 +2,21 @@ import { ListChecks, LogIn } from 'lucide-react';
 import { useEffect } from 'react';
 import { Link } from 'react-router';
 import { MyDayPanel, useMyDay } from '@/components/layout/MyDayDrawer';
+import { NotificationWatcher } from '@/components/layout/NotificationWatcher';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/misc';
 import { useSession } from '@/lib/session';
 
-/** Bridge exposed by the RGK WorkTrack desktop app (desktop/preload.cjs). Absent in a normal browser. */
+/** Bridge exposed by the desktop app (desktop/panel-preload.cjs). Absent in a normal browser; older app versions lack the optional parts. */
 declare global {
   interface Window {
-    rgkWidget?: { hide: () => void; setCount: (done: number, total: number) => void };
+    rgkWidget?: {
+      hide: () => void;
+      setCount: (done: number, total: number) => void;
+      setUnread?: (unread: number) => void;
+      notify?: (n: { id: string | null; title: string; body: string; link: string | null; sound: boolean }) => void;
+      onNotificationOpened?: (fn: (id: string) => void) => () => void;
+    };
   }
 }
 
@@ -62,7 +69,17 @@ export function WidgetMyDayPage() {
     );
   }
   if (me.user.role === 'SUPER_ADMIN') {
-    return <p className="flex h-dvh items-center justify-center bg-card p-6 text-center text-[13px] text-muted-foreground">My day is for employees and managers.</p>;
+    return (
+      <>
+        <NotificationWatcher />
+        <p className="flex h-dvh items-center justify-center bg-card p-6 text-center text-[13px] text-muted-foreground">My day is for employees and managers.</p>
+      </>
+    );
   }
-  return <Panel />;
+  return (
+    <>
+      <NotificationWatcher />
+      <Panel />
+    </>
+  );
 }

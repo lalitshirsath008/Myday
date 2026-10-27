@@ -1,7 +1,7 @@
 import { addDays, REVIEW_STATUSES, type DailySummaryRow, type WeeklySummaryRow } from '@rgk/core';
 import { ChevronLeft, ChevronRight, Edit3, Plus, Printer, ShieldAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { ExportMenu } from '@/components/common/ExportMenu';
 import { DateRangeFilter, FilterSelect, FilterSheetButton, rangeFor, useDepartments, useProjects, type RangePreset } from '@/components/common/filters';
 import { DefinitionList, ListCard, PageHeader } from '@/components/common/layout';
@@ -10,11 +10,32 @@ import { ReviewPanel, ReviewTimeline, TaskCardView, VersionHistory } from '@/com
 import { Button } from '@/components/ui/button';
 import { Card, CardBody } from '@/components/ui/card';
 import { Disclosure, EmptyState, ErrorState, Notice, PageSkeleton, Segmented, Skeleton } from '@/components/ui/misc';
+import { PillSwitch } from '@/components/ui/pill-switch';
 import { useOp, useOpMutation } from '@/lib/api';
 import { useMe } from '@/lib/session';
 import { fmtDate, fmtDateTime, fmtShortDate } from '@/lib/utils';
 
 type Mode = 'own' | 'team' | 'admin';
+
+const HUB_TITLE: Record<Mode, string> = { own: 'Report history', team: 'Team reports', admin: 'Reports' };
+
+/** Daily | Weekly switch: the two report lists read as one page with two tabs. */
+function ReportTabs({ mode, current }: { mode: Mode; current: 'daily' | 'weekly' }) {
+  const navigate = useNavigate();
+  const base = mode === 'team' ? '/reviews' : mode === 'admin' ? '/admin/reports' : '/reports';
+  return (
+    <PillSwitch
+      label="Report type"
+      value={current}
+      onChange={(v) => navigate(`${base}/${v}`, { replace: true })}
+      options={[
+        { value: 'daily', label: 'Daily' },
+        { value: 'weekly', label: 'Weekly' },
+      ]}
+      className="no-print mb-4 w-full sm:w-[260px]"
+    />
+  );
+}
 type StatusChip = '' | 'PENDING_REVIEW' | 'APPROVED' | 'RETURNED';
 const STATUS_CHIPS: { value: StatusChip; label: string }[] = [
   { value: '', label: 'All' },
@@ -101,7 +122,7 @@ export function DailyReportListPage({ mode }: { mode: Mode }) {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
-        title={mode === 'own' ? 'My reports' : mode === 'team' ? 'Team reports' : 'Daily reports'}
+        title={HUB_TITLE[mode]}
         actions={
           <>
             {mode === 'own' && (
@@ -115,6 +136,7 @@ export function DailyReportListPage({ mode }: { mode: Mode }) {
           </>
         }
       />
+      <ReportTabs mode={mode} current="daily" />
       <div className="no-print mb-4 space-y-2.5">
         <DateRangeFilter {...range} today={me.today} presets={['last7', 'last30', 'thisMonth', 'lastMonth', 'custom']} onChange={(v) => { setRange(v); setPage(0); }} />
         <div className="flex items-center gap-2">
@@ -171,7 +193,7 @@ export function DailyReportDetailPage({ mode }: { mode: 'own' | 'review' | 'admi
   if (q.isLoading) return <PageSkeleton />;
   if (q.error || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   const { report, employee } = q.data;
-  const back = mode === 'review' ? { to: '/reviews/pending', label: 'To review' } : mode === 'admin' ? { to: '/admin/reports/daily', label: 'Daily reports' } : { to: '/reports/daily', label: 'My reports' };
+  const back = mode === 'review' ? { to: '/reviews/pending', label: 'To review' } : mode === 'admin' ? { to: '/admin/reports/daily', label: 'Reports' } : { to: '/reports/daily', label: 'Report history' };
   const done = report.tasks.filter((t) => t.status === 'COMPLETED').length;
 
   return (
@@ -280,8 +302,8 @@ export function WeeklyReportListPage({ mode }: { mode: Mode }) {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
-        title={mode === 'own' ? 'Past weekly reports' : 'Weekly reports'}
-        description="Last 6 months"
+        title={HUB_TITLE[mode]}
+        description="Weekly reports · last 6 months"
         actions={
           <>
             {mode === 'own' && (
@@ -295,6 +317,7 @@ export function WeeklyReportListPage({ mode }: { mode: Mode }) {
           </>
         }
       />
+      <ReportTabs mode={mode} current="weekly" />
       <div className="no-print mb-4 flex items-center gap-2">
         <Segmented label="Review status" className="flex-1" value={reviewStatus} onChange={setReviewStatus} options={STATUS_CHIPS} />
         {mode !== 'own' && (

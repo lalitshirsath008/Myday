@@ -124,6 +124,9 @@ export function audit(
   tx.create(COL.auditLogs, id, doc as unknown as AuditLogDoc & { id: string });
 }
 
+/** Deterministic notification id for a keyed event (see `notify`). */
+export const notificationId = (type: NotificationType, userId: string, key: string) => `${type}_${userId}_${key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 300);
+
 /**
  * Queue a notification inside a transaction. `key` makes the id deterministic, so retrying the
  * same event never produces a second notification.
@@ -135,7 +138,7 @@ export function notify(
   n: { userId: string | null; type: NotificationType; title: string; body: string; link: string | null; key?: string },
 ): void {
   if (!n.userId || !settings.notificationTypesEnabled[n.type]) return;
-  const id = n.key ? `${n.type}_${n.userId}_${n.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 300) : globalThis.crypto.randomUUID();
+  const id = n.key ? notificationId(n.type, n.userId, n.key) : globalThis.crypto.randomUUID();
   const doc: NotificationDoc = {
     id,
     userId: n.userId,

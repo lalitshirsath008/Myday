@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { useOp, useOpMutation } from '@/lib/api';
 import { cn, fmtRelative } from '@/lib/utils';
+import { SoundToggle } from './NotificationWatcher';
 
 export function NotificationBell() {
   const navigate = useNavigate();
@@ -25,11 +26,14 @@ export function NotificationBell() {
         <P.Content align="end" sideOffset={8} className="z-50 w-[22rem] max-w-[calc(100vw-1.5rem)] animate-fade-in overflow-hidden rounded-2xl border bg-card shadow-[var(--shadow-raised)]">
           <div className="flex items-center justify-between border-b px-4 py-2.5">
             <p className="text-sm font-semibold">Notifications</p>
-            {unread > 0 && (
-              <button className="cursor-pointer text-xs font-medium text-primary hover:underline" onClick={() => markRead.mutate({ ids: null })}>
-                Mark all read
-              </button>
-            )}
+            <span className="flex items-center gap-2">
+              {unread > 0 && (
+                <button className="cursor-pointer text-xs font-medium text-primary hover:underline" onClick={() => markRead.mutate({ ids: null })}>
+                  Mark all read
+                </button>
+              )}
+              <SoundToggle />
+            </span>
           </div>
           <ul className="max-h-96 overflow-y-auto">
             {!data?.items.length && <li className="px-4 py-8 text-center text-sm text-muted-foreground">You're all caught up.</li>}

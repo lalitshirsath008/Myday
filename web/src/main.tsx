@@ -68,7 +68,8 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <Root />
-      <Toaster richColors closeButton position="top-right" />
+      {/* Bottom, so action toasts never cover the iOS-style notification banners at the top. Above the phone bottom bar. */}
+      <Toaster richColors closeButton position="bottom-center" mobileOffset={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom))' }} />
     </QueryClientProvider>
   </StrictMode>,
 );

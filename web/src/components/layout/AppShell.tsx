@@ -1,16 +1,17 @@
 import { ROLE_LABELS } from '@rgk/core';
 import { ChevronsLeft, ChevronsRight, KeyRound, LogOut, Monitor, Moon, Search, Sun, UserCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Avatar, Menu, Sheet } from '@/components/ui/misc';
-import { bottomNavFor, homeFor, navFor } from '@/lib/nav';
+import { bottomNavFor, homeFor, isNavActive, navFor } from '@/lib/nav';
 import { useMe, useSession } from '@/lib/session';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { GlobalSearch } from './GlobalSearch';
 import { MyDayDrawer } from './MyDayDrawer';
 import { NotificationBell } from './NotificationBell';
+import { NotificationWatcher } from './NotificationWatcher';
 
 /** Typographic brand mark. */
 export function Logo({ compact }: { compact?: boolean }) {
@@ -41,6 +42,7 @@ function readCollapsed(): boolean {
 
 function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const me = useMe();
+  const { pathname } = useLocation();
   const sections = navFor(me.role, me.isReporter);
   return (
     <aside className={cn('no-print sticky top-0 hidden h-dvh shrink-0 flex-col border-r bg-nav transition-[width] duration-200 lg:flex', collapsed ? 'w-[76px]' : 'w-60')}>
@@ -56,21 +58,19 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             <ul className="space-y-0.5">
               {s.items.map((item) => (
                 <li key={item.to}>
-                  <NavLink
+                  <Link
                     to={item.to}
-                    end={item.end}
                     title={collapsed ? item.label : undefined}
-                    className={({ isActive }) =>
-                      cn(
-                        'tap flex items-center gap-3 rounded-xl px-3 py-2 text-[14px] text-foreground/75 hover:bg-muted hover:text-foreground',
-                        collapsed && 'justify-center px-0',
-                        isActive && 'bg-nav-active font-medium text-nav-active-foreground hover:bg-nav-active hover:text-nav-active-foreground',
-                      )
-                    }
+                    aria-current={isNavActive(item, pathname) ? 'page' : undefined}
+                    className={cn(
+                      'tap flex items-center gap-3 rounded-xl px-3 py-2 text-[14px] text-foreground/75 hover:bg-muted hover:text-foreground',
+                      collapsed && 'justify-center px-0',
+                      isNavActive(item, pathname) && 'bg-nav-active font-medium text-nav-active-foreground hover:bg-nav-active hover:text-nav-active-foreground',
+                    )}
                   >
                     <item.icon className="size-[18px] shrink-0" aria-hidden />
                     {collapsed ? <span className="sr-only">{item.label}</span> : <span className="truncate">{item.label}</span>}
-                  </NavLink>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -88,21 +88,22 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
 function BottomNav() {
   const me = useMe();
+  const { pathname } = useLocation();
   return (
     <nav aria-label="Main" className="no-print pb-safe fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur-md lg:hidden">
       <ul className="mx-auto grid max-w-md grid-cols-4">
         {bottomNavFor(me.role).map((item) => (
           <li key={item.to}>
-            <NavLink to={item.to} end={item.end} className={({ isActive }) => cn('tap flex flex-col items-center gap-1 pb-2 pt-2.5 text-[11px] font-medium', isActive ? 'text-primary' : 'text-muted-foreground')}>
-              {({ isActive }) => (
-                <>
-                  <span className={cn('flex h-7 w-12 items-center justify-center rounded-full transition-colors', isActive && 'bg-brand-soft')}>
-                    <item.icon className="size-[20px]" strokeWidth={isActive ? 2.4 : 2} aria-hidden />
-                  </span>
-                  {item.label}
-                </>
-              )}
-            </NavLink>
+            <Link
+              to={item.to}
+              aria-current={isNavActive(item, pathname) ? 'page' : undefined}
+              className={cn('tap flex flex-col items-center gap-1 pb-2 pt-2.5 text-[11px] font-medium', isNavActive(item, pathname) ? 'text-primary' : 'text-muted-foreground')}
+            >
+              <span className={cn('flex h-7 w-12 items-center justify-center rounded-full transition-colors', isNavActive(item, pathname) && 'bg-brand-soft')}>
+                <item.icon className="size-[20px]" strokeWidth={isNavActive(item, pathname) ? 2.4 : 2} aria-hidden />
+              </span>
+              {item.label}
+            </Link>
           </li>
         ))}
       </ul>
@@ -180,6 +181,7 @@ export function AppShell() {
       </div>
       <BottomNav />
       {me.role !== 'SUPER_ADMIN' && <MyDayDrawer />}
+      <NotificationWatcher />
       {showSearch && (
         <Sheet open={searchOpen} onOpenChange={setSearchOpen} title="Search">
           <div className="min-h-[50dvh] pt-1">

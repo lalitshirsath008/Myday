@@ -61,6 +61,27 @@
       .count.all {
         background: #1f9d55;
       }
+      /* Unread notifications, iOS-style red badge */
+      .unread {
+        position: absolute;
+        top: 4px;
+        left: 3px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        box-sizing: border-box;
+        border-radius: 999px;
+        background: #ff3b30;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 16px;
+        text-align: center;
+        box-shadow: 0 0 0 1.5px #c8530a;
+      }
+      .unread:empty {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -74,14 +95,28 @@
       </svg>
       <span class="label">My day</span>
       <span class="count" id="count"></span>
+      <span class="unread" id="unread"></span>
     </button>
     <script>
       const tab = document.getElementById('tab');
       const count = document.getElementById('count');
+      const unreadEl = document.getElementById('unread');
+      let label = { done: 0, total: 0, unread: 0 };
+      const describe = () => {
+        const parts = [label.total ? `My day: ${label.done} of ${label.total} done` : 'My day'];
+        if (label.unread) parts.push(`${label.unread} unread notification${label.unread === 1 ? '' : 's'}`);
+        tab.setAttribute('aria-label', parts.join(', '));
+      };
       window.rgkTab.onCount((done, total) => {
         count.textContent = total ? `${done}/${total}` : '';
         count.classList.toggle('all', total > 0 && done === total);
-        tab.setAttribute('aria-label', total ? `My day: ${done} of ${total} done` : 'My day');
+        label = { ...label, done, total };
+        describe();
+      });
+      window.rgkTab.onUnread((unread) => {
+        unreadEl.textContent = unread ? (unread > 99 ? '99+' : String(unread)) : '';
+        label = { ...label, unread };
+        describe();
       });
 
       // Click opens the panel; dragging up or down moves the tab.

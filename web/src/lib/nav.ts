@@ -32,6 +32,15 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   end?: boolean;
+  /** Also highlighted on these paths and below, e.g. both tabs of a tabbed page. */
+  match?: string[];
+}
+
+/** Whether a menu item is the current page (same rules as NavLink, plus `match`). */
+export function isNavActive(item: NavItem, pathname: string): boolean {
+  const under = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
+  if (item.match?.some(under)) return true;
+  return item.end ? pathname === item.to : under(item.to);
 }
 
 export interface NavSection {
@@ -44,9 +53,8 @@ const myWork: NavSection = {
   items: [
     { to: '/dashboard', label: 'Home', icon: Home },
     { to: '/daily/today', label: "Today's tasks", icon: ListTodo },
-    { to: '/reports/daily', label: 'Daily reports', icon: FileText, end: true },
     { to: '/weekly', label: 'Weekly report', icon: CalendarCheck, end: true },
-    { to: '/reports/weekly', label: 'Past weekly reports', icon: History, end: true },
+    { to: '/reports/daily', label: 'Report history', icon: History, match: ['/reports'] },
     { to: '/my/projects', label: 'My projects', icon: FolderKanban },
     { to: '/my/analytics', label: 'My progress', icon: BarChart3 },
   ],
@@ -57,8 +65,7 @@ const manager: NavSection = {
   items: [
     { to: '/manager', label: 'My team', icon: Users, end: true },
     { to: '/reviews/pending', label: 'To review', icon: ClipboardCheck },
-    { to: '/reviews/daily', label: 'Daily reports', icon: FileText, end: true },
-    { to: '/reviews/weekly', label: 'Weekly reports', icon: CalendarCheck, end: true },
+    { to: '/reviews/daily', label: 'Team reports', icon: FileText, match: ['/reviews/daily', '/reviews/weekly'] },
     { to: '/team', label: 'Team members', icon: UserCircle, end: true },
     { to: '/team/analytics', label: 'Team progress', icon: BarChart3 },
     { to: '/team/compliance', label: 'Who submitted', icon: ClipboardList },
@@ -101,8 +108,7 @@ const adminSections: NavSection[] = [
   {
     title: 'Reports',
     items: [
-      { to: '/admin/reports/daily', label: 'Daily reports', icon: FileClock },
-      { to: '/admin/reports/weekly', label: 'Weekly reports', icon: History },
+      { to: '/admin/reports/daily', label: 'Reports', icon: FileClock, match: ['/admin/reports'] },
       { to: '/admin/audit', label: 'Audit history', icon: ScrollText },
     ],
   },
@@ -135,13 +141,13 @@ export function bottomNavFor(role: Role): NavItem[] {
   const profile = { to: '/profile', label: 'Profile', icon: UserCircle };
   switch (role) {
     case 'SUPER_ADMIN':
-      return [{ to: '/admin', label: 'Home', icon: Home, end: true }, { to: '/admin/users', label: 'People', icon: Users }, { to: '/admin/reports/daily', label: 'Reports', icon: FileText }, profile];
+      return [{ to: '/admin', label: 'Home', icon: Home, end: true }, { to: '/admin/users', label: 'People', icon: Users }, { to: '/admin/reports/daily', label: 'Reports', icon: FileText, match: ['/admin/reports'] }, profile];
     case 'MANAGEMENT':
       return [{ to: '/management', label: 'Home', icon: Home, end: true }, { to: '/directory', label: 'People', icon: Users }, { to: '/projects', label: 'Projects', icon: FolderKanban }, profile];
     case 'REPORTING_MANAGER':
       return [{ to: '/manager', label: 'Team', icon: Home, end: true }, { to: '/reviews/pending', label: 'Review', icon: ClipboardCheck }, { to: '/daily/today', label: 'My Tasks', icon: ListTodo }, profile];
     default:
-      return [{ to: '/dashboard', label: 'Home', icon: Home }, { to: '/daily/today', label: 'My Tasks', icon: ListTodo }, { to: '/reports/daily', label: 'Reports', icon: FileText }, profile];
+      return [{ to: '/dashboard', label: 'Home', icon: Home }, { to: '/daily/today', label: 'My Tasks', icon: ListTodo }, { to: '/reports/daily', label: 'Reports', icon: FileText, match: ['/reports'] }, profile];
   }
 }
 

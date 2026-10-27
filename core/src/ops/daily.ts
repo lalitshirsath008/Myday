@@ -322,6 +322,22 @@ export const dailyOps = {
           updatedAt: now,
         };
         if (!existing) tx.create(COL.uniqueKeys, dailyKey(me.id, input.workDate), { id: dailyKey(me.id, input.workDate), ownerId: id, createdAt: now });
+        // Tell people they were added as a collaborator, once: only when they were not already on that task.
+        const added = new Map<string, string[]>();
+        tasks.forEach((t, i) => {
+          const before = new Set(existing?.tasks[i]?.collaboratorIds ?? []);
+          for (const c of t.collaboratorIds) if (!before.has(c)) added.set(c, [...(added.get(c) ?? []), t.title.trim() || `Task ${i + 1}`]);
+        });
+        for (const [userId, titles] of added) {
+          notify(tx, ctx, settings, {
+            userId,
+            type: 'COLLABORATOR_ADDED',
+            title: 'Added as a collaborator',
+            body: `${me.fullName} added you to ${titles.map((t) => `“${t}”`).join(', ')} on ${input.workDate}.`,
+            link: null,
+            key: `${id}_${titles.join('|')}`,
+          });
+        }
         if (input.submit) {
           const resubmission = report.version > 0;
           report = { ...report, ...submissionPatch(ctx, report, me, late) };

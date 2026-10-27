@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Skeleton } from '@/components/ui/misc';
 import { useOp, useOpMutation } from '@/lib/api';
 import { cn, fmtRelative } from '@/lib/utils';
+import { SoundToggle } from './NotificationWatcher';
 
 /** Shared with the tab badge in the My day panel, so both read one cached list. */
 export const PANEL_NOTIFICATIONS = { unreadOnly: false, limit: 30 } as const;
@@ -38,11 +39,14 @@ export function PanelNotifications({ onNavigate }: { onNavigate?: () => void }) 
     <section aria-label="Notifications" className="pt-1">
       <div className="flex items-center justify-between px-4 py-2">
         <p className="text-[12px] text-muted-foreground">{unread ? `${unread} unread` : 'All caught up'}</p>
-        {unread > 0 && (
-          <button type="button" className="cursor-pointer text-[12px] font-medium text-primary hover:underline" onClick={() => markRead.mutate({ ids: null })}>
-            Mark all read
-          </button>
-        )}
+        <span className="flex items-center gap-2">
+          {unread > 0 && (
+            <button type="button" className="cursor-pointer text-[12px] font-medium text-primary hover:underline" onClick={() => markRead.mutate({ ids: null })}>
+              Mark all read
+            </button>
+          )}
+          <SoundToggle />
+        </span>
       </div>
       {items.length === 0 ? (
         <div className="animate-fade-up px-4 py-10 text-center">

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { dailyDeadline, isExpectedReporter, resolveWorkingDay } from '../calendar';
-import { addDays, todayIn, zonedParts, timeToMinutes, type DateStr } from '../dates';
+import { addDays, todayIn, zonedDateTimeToInstant, zonedParts, timeToMinutes, type DateStr } from '../dates';
 import { AppError, deny, invalid } from '../errors';
 import { isOverdue, isSubmitted, latestTaskStates } from '../metrics';
 import { can } from '../permissions';
@@ -9,7 +9,7 @@ import type { Tx } from '../store';
 import { COL, type DailyReportDoc, type NotificationDoc, type ProjectDoc, type SystemSettings, type UserDoc } from '../types';
 import { nowIso, op, requirePermission, type Ctx } from './context';
 import { flattenTasks } from './analytics';
-import { allDepartments, audit, getExceptions, getSettings, normalizeName, notify, userSummary } from './helpers';
+import { allDepartments, audit, getExceptions, getSettings, normalizeName, notificationId, notify, userSummary } from './helpers';
 
 /** Lead: any active user. Reviewer: an active Reporting Manager, Management or Super Admin, not the lead. */
 export async function validateProjectPeople(ctx: Ctx, ownerId: string | null, reviewerId: string | null): Promise<void> {
@@ -171,6 +171,47 @@ export const miscOps = {
     },
   }),
 
+  /**
+   * The signed-in person's "complete your 3 priority tasks" reminder. Created when a reminder time has
+   * passed and today's report is not submitted yet; each reminder time fires at most once. The app calls
+   * this at `nextCheckAt`, so reminders also work without the scheduled server job.
+   */
+  'me.checkReminders': op({
+    input: z.object({}).default({}),
+    run: async (ctx) => {
+      const settings = await getSettings(ctx);
+      const now = ctx.now();
+      const local = zonedParts(now, settings.timezone);
+      const today = local.date;
+      const nowMinute = local.hour * 60 + local.minute;
+      const deadline = dailyDeadline(today, settings);
+      const nextTime = settings.reminderTimes.find((t) => timeToMinutes(t) > nowMinute);
+      const nextAt = nextTime ? zonedDateTimeToInstant(today, nextTime, settings.timezone) : null;
+      const none = { notification: null, nextCheckAt: null };
+      const me = ctx.actor;
+      if (!settings.notificationTypesEnabled.DEADLINE_UPCOMING || !isExpectedReporter(me, today, settings) || now >= deadline) return none;
+      const [exceptions, reports] = await Promise.all([
+        getExceptions(ctx, today, today),
+        ctx.store.query<DailyReportDoc & { id: string }>(COL.dailyReports, { where: [['employeeId', '==', me.id], ['workDate', '==', today]], limit: 1 }),
+      ]);
+      if (!resolveWorkingDay(today, settings.calendarPolicies, exceptions, me.departmentId).isWorkingDay) return none;
+      const report = reports[0] ?? null;
+      if (reportDone(report)) return none;
+      const nextCheckAt = nextAt && nextAt < deadline ? nextAt.toISOString() : null;
+      const slot = currentReminderSlot(settings, nowMinute);
+      if (slot === null) return { notification: null, nextCheckAt };
+      const key = `daily_${today}_s${slot}`;
+      const id = notificationId('DEADLINE_UPCOMING', me.id, key);
+      const text = priorityReminder(report, settings, deadline);
+      const created = await ctx.store.transaction(async (tx) => {
+        if (await tx.get(COL.notifications, id)) return false;
+        notify(tx, ctx, settings, { userId: me.id, type: 'DEADLINE_UPCOMING', ...text, link: '/daily/today', key });
+        return true;
+      });
+      return { notification: created ? { id, ...text, link: '/daily/today' } : null, nextCheckAt };
+    },
+  }),
+
   'admin.runReminders': op({
     input: z.object({ force: z.boolean().default(true) }),
     run: async (ctx, { force }) => {
@@ -185,23 +226,51 @@ export const miscOps = {
  * Uses the configured calendar and deadlines. Deterministic notification ids mean a reminder
  * is never sent twice for the same employee, date and event.
  */
+/** A day's report counts as done once submitted (and not sent back for changes). */
+const reportDone = (r: DailyReportDoc | null | undefined) => !!r && isSubmitted(r) && r.reviewStatus !== 'RETURNED';
+
+/** Index of the reminder time that most recently passed (company time), or null before the first one. */
+export function currentReminderSlot(s: SystemSettings, nowMinute: number): number | null {
+  let slot: number | null = null;
+  s.reminderTimes.forEach((t, i) => {
+    if (timeToMinutes(t) <= nowMinute) slot = i;
+  });
+  return slot;
+}
+
+/** Wording of the "complete your 3 priority tasks" reminder for where the person is today. */
+function priorityReminder(report: DailyReportDoc | null | undefined, s: SystemSettings, deadline: Date): { title: string; body: string } {
+  const time = new Intl.DateTimeFormat('en-IN', { timeZone: s.timezone, hour: '2-digit', minute: '2-digit' }).format(deadline);
+  const n = s.primaryTaskSlots;
+  if (report?.reviewStatus === 'RETURNED') return { title: 'Your report needs changes', body: `Make the requested changes and resubmit today's report before ${time}.` };
+  const filled = (report?.tasks ?? []).filter((t) => t.isPrimary && t.title.trim()).length;
+  return {
+    title: `Complete your ${n} priority tasks`,
+    body: filled >= n ? `All ${n} are filled. Update their progress and submit today's report before ${time}.` : `${filled} of ${n} filled. Fill all ${n} and submit today's report before ${time}.`,
+  };
+}
+
 export async function runReminders(ctx: Ctx, opts: { force: boolean }): Promise<{ ran: boolean; deadlineReminders: number; overdueNotices: number; date: DateStr }> {
   const settings = await getSettings(ctx);
   const now = ctx.now();
   const local = zonedParts(now, settings.timezone);
   const today = local.date;
-  const reminderMinute = timeToMinutes(settings.reminderTime);
   const nowMinute = local.hour * 60 + local.minute;
-  if (!opts.force && (nowMinute < reminderMinute || nowMinute >= reminderMinute + 60)) {
+  // The scheduled job runs hourly; it sends during the hour after each reminder time.
+  const current = currentReminderSlot(settings, nowMinute);
+  const inWindow = current !== null && nowMinute < timeToMinutes(settings.reminderTimes[current]!) + 60;
+  if (!opts.force && !inWindow) {
     return { ran: false, deadlineReminders: 0, overdueNotices: 0, date: today };
   }
+  const slot = current ?? 0;
   const deadline = dailyDeadline(today, settings);
   const [users, exceptions, todayReports] = await Promise.all([
     ctx.store.query<UserDoc & { id: string }>(COL.users, { where: [['accountStatus', '==', 'ACTIVE']], limit: 5000 }),
     getExceptions(ctx, today, today),
     ctx.store.query<DailyReportDoc & { id: string }>(COL.dailyReports, { where: [['workDate', '==', today]] }),
   ]);
-  const submittedToday = new Set(todayReports.filter(isSubmitted).map((r) => r.employeeId));
+  const todayByEmployee = new Map(todayReports.map((r) => [r.employeeId, r]));
+  const submittedToday = new Set(todayReports.filter(reportDone).map((r) => r.employeeId));
   const due = now < deadline
     ? users.filter((u) => isExpectedReporter(u, today, settings) && resolveWorkingDay(today, settings.calendarPolicies, exceptions, u.departmentId).isWorkingDay && !submittedToday.has(u.id))
     : [];
@@ -210,20 +279,19 @@ export async function runReminders(ctx: Ctx, opts: { force: boolean }): Promise<
   const recent = await ctx.store.query<DailyReportDoc & { id: string }>(COL.dailyReports, { where: [['workDate', '>=', from], ['workDate', '<=', today]], limit: 20_000 });
   const overdue = latestTaskStates(flattenTasks(recent.filter(isSubmitted))).filter((t) => isOverdue(t, todayIn(settings.timezone, now)));
 
-  const notifId = (type: string, userId: string, key: string) => `${type}_${userId}_${key}`.replace(/[^A-Za-z0-9_-]/g, '_');
+  const reminderKey = `daily_${today}_s${slot}`;
   const candidates = [
-    ...due.map((u) => ({ id: notifId('DEADLINE_UPCOMING', u.id, `daily_${today}`), userId: u.id, kind: 'deadline' as const, task: null })),
-    ...overdue.map((t) => ({ id: notifId('TASK_OVERDUE', t.employeeId, `${t.reportId}_${t.slot}`), userId: t.employeeId, kind: 'overdue' as const, task: t })),
+    ...due.map((u) => ({ id: notificationId('DEADLINE_UPCOMING', u.id, reminderKey), userId: u.id, kind: 'deadline' as const, task: null })),
+    ...overdue.map((t) => ({ id: notificationId('TASK_OVERDUE', t.employeeId, `${t.reportId}_${t.slot}`), userId: t.employeeId, kind: 'overdue' as const, task: t })),
   ];
   const existing = new Set((await ctx.store.getMany(COL.notifications, candidates.map((c) => c.id))).map((n) => n.id));
   const fresh = candidates.filter((c) => !existing.has(c.id));
-  const time = new Intl.DateTimeFormat('en-IN', { timeZone: settings.timezone, hour: '2-digit', minute: '2-digit' }).format(deadline);
   for (let i = 0; i < fresh.length; i += 200) {
     const chunk = fresh.slice(i, i + 200);
     await ctx.store.transaction(async (tx) => {
       for (const c of chunk) {
         if (c.kind === 'deadline') {
-          notify(tx, ctx, settings, { userId: c.userId, type: 'DEADLINE_UPCOMING', title: "Today's report is due", body: `Submit your daily report for ${today} before ${time}.`, link: '/daily/today', key: `daily_${today}` });
+          notify(tx, ctx, settings, { userId: c.userId, type: 'DEADLINE_UPCOMING', ...priorityReminder(todayByEmployee.get(c.userId), settings, deadline), link: '/daily/today', key: reminderKey });
         } else if (c.task) {
           notify(tx, ctx, settings, { userId: c.userId, type: 'TASK_OVERDUE', title: 'Task overdue', body: `"${c.task.title}" was due on ${c.task.dueDate} and is not completed.`, link: `/reports/daily/${c.task.reportId}`, key: `${c.task.reportId}_${c.task.slot}` });
         }

@@ -293,7 +293,8 @@ export interface SystemSettings {
   dailyGraceMinutes: number;
   weeklyDeadlineDayOffset: number;
   weeklyDeadlineTime: TimeStr;
-  reminderTime: TimeStr;
+  /** Times of day (company time) for the "complete your 3 priority tasks" reminders. Sorted. */
+  reminderTimes: TimeStr[];
   primaryTaskSlots: number;
   minTasksForSubmission: number;
   allowAdditionalTasks: boolean;
@@ -322,6 +323,7 @@ export const NOTIFICATION_TYPES = [
   'ACCOUNT_ACTIVATED',
   'MANAGER_REASSIGNED',
   'PROJECT_ASSIGNED',
+  'COLLABORATOR_ADDED',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

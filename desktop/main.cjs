@@ -1,7 +1,7 @@
 // RGK WorkTrack desktop companion.
 // Puts the "My day" tab on the right edge of the screen, above every app. Clicking it slides
 // out the same My day panel as the website (it loads <appUrl>/widget/my-day).
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, powerMonitor, screen, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -29,8 +29,9 @@ let APP_URL = new URL(appUrlStr);
 let PANEL_URL = new URL('/widget/my-day', APP_URL).toString();
 const TAB = { width: 34, height: 112 };
 const PANEL_WIDTH = 420;
+const BANNER = { width: 392, height: 112 };
 
-let tab, panel, tray;
+let tab, panel, tray, banner;
 let lastBlurHide = 0;
 
 const workArea = () => screen.getPrimaryDisplay().workArea;
@@ -88,7 +89,8 @@ function createPanel() {
     backgroundColor: '#ffffff',
     title: 'My day — RGK Myday',
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    webPreferences: { preload: path.join(__dirname, 'panel-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    // Keeps checking for notifications while hidden.
+    webPreferences: { preload: path.join(__dirname, 'panel-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
   });
   panel.setAlwaysOnTop(true, 'screen-saver');
   panel.loadURL(PANEL_URL);
@@ -116,13 +118,14 @@ function createPanel() {
     const html = `<body style="font:14px Segoe UI,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;color:#333;text-align:center;padding:24px;box-sizing:border-box">
       <p style="font-size:17px;font-weight:600;margin:0 0 6px">Can’t reach RGK Myday</p>
       <p style="margin:0 0 16px;color:#777">${APP_URL.host} · ${String(desc).replace(/[<>&]/g, '')}</p>
-      <p style="margin:0 0 16px;color:#777">Check your internet connection or server address.</p>
+      <p style="margin:0 0 16px;color:#777">No internet? It reconnects by itself as soon as you are back online.</p>
       <div style="display:flex;gap:8px">
         <button onclick="location.href='${PANEL_URL}'" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer">Retry</button>
         <button onclick="location.href='http://localhost:5173/widget/my-day'" style="padding:8px 16px;background:#e5e7eb;color:#1f2937;border:none;border-radius:6px;cursor:pointer">Localhost (5173)</button>
       </div>
     </body>`;
     panel.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    scheduleRetry();
   });
   panel.on('blur', () => {
     if (panel.isVisible()) {
@@ -136,6 +139,14 @@ function createPanel() {
       hidePanel();
     }
   });
+}
+
+// Offline: quietly try again every 20 seconds (and when the laptop wakes up) until the site loads.
+let retryTimer = null;
+const offline = () => panel && !panel.isDestroyed() && panel.webContents.getURL().startsWith('data:');
+function scheduleRetry() {
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => offline() && panel.loadURL(PANEL_URL), 20_000);
 }
 
 /** Slide the panel in from the right edge. */
@@ -172,6 +183,62 @@ function togglePanel() {
   // A click on the tab first blurs (and hides) the panel; don't reopen it straight away.
   if (Date.now() - lastBlurHide < 300) return;
   showPanel();
+}
+
+// ---- iOS-style notification banner, top-right of the screen, over every app ----
+let bannerQueue = [];
+let bannerCurrent = null;
+let bannerReady = false;
+
+function bannerBounds() {
+  const wa = workArea();
+  return { x: wa.x + wa.width - BANNER.width - 6, y: wa.y + 6, ...BANNER };
+}
+
+function createBanner() {
+  banner = new BrowserWindow({
+    ...bannerBounds(),
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false,
+    hasShadow: false,
+    thickFrame: false,
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'banner-preload.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      autoplayPolicy: 'no-user-gesture-required', // the chime plays without a click
+    },
+  });
+  banner.setAlwaysOnTop(true, 'screen-saver');
+  banner.loadFile(path.join(__dirname, 'banner.html'));
+  banner.webContents.once('did-finish-load', () => {
+    bannerReady = true;
+    nextBanner();
+  });
+}
+
+function nextBanner() {
+  if (!bannerReady || bannerCurrent || !bannerQueue.length) return;
+  bannerCurrent = bannerQueue.shift();
+  banner.setBounds(bannerBounds());
+  banner.webContents.send('banner:show', bannerCurrent);
+  banner.showInactive();
+}
+
+function bannerDone() {
+  bannerCurrent = null;
+  if (!bannerQueue.length) banner.hide();
+  nextBanner();
 }
 
 function openLoginSetting() {
@@ -255,6 +322,32 @@ ipcMain.on('panel:count', (e, done, total) => {
   tab.webContents.send('count', done, total);
   tray.setToolTip(total ? `My day: ${done} of ${total} done` : 'RGK WorkTrack — My day');
 });
+ipcMain.on('panel:unread', (e, unread) => {
+  if (!from(e, panel) || !Number.isInteger(unread) || unread < 0) return;
+  tab.webContents.send('unread', unread);
+});
+// A new notification from the page. Only same-site links (a path like /reports/...) are accepted.
+ipcMain.on('panel:notify', (e, n) => {
+  if (!from(e, panel) || !n || typeof n.title !== 'string') return;
+  const link = typeof n.link === 'string' && n.link.startsWith('/') && !n.link.startsWith('//') ? n.link.slice(0, 300) : null;
+  bannerQueue.push({
+    id: typeof n.id === 'string' ? n.id.slice(0, 100) : null,
+    title: n.title.slice(0, 200),
+    body: typeof n.body === 'string' ? n.body.slice(0, 500) : '',
+    link,
+    sound: n.sound !== false,
+  });
+  bannerQueue = bannerQueue.slice(-3);
+  nextBanner();
+});
+ipcMain.on('banner:click', (e) => {
+  if (!from(e, banner) || !bannerCurrent) return;
+  const { id, link } = bannerCurrent;
+  if (id) panel.webContents.send('notification:opened', id);
+  if (link) shell.openExternal(new URL(link, APP_URL).toString());
+  else showPanel();
+});
+ipcMain.on('banner:done', (e) => from(e, banner) && bannerDone());
 
 // One copy only: starting it again just opens the panel.
 if (!app.requestSingleInstanceLock()) {
@@ -270,7 +363,9 @@ if (!app.requestSingleInstanceLock()) {
     }
     createTab();
     createPanel();
+    createBanner();
     buildTray();
+    powerMonitor.on('resume', () => offline() && panel.loadURL(PANEL_URL));
     screen.on('display-metrics-changed', () => {
       placeTab();
       if (panel.isVisible()) panel.setBounds(panelBounds());

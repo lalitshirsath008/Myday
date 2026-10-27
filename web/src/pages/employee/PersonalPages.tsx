@@ -268,6 +268,7 @@ const NOTIF_ICON: Record<NotificationType, { icon: LucideIcon; cls: string }> = 
   REPORT_RETURNED: { icon: RotateCcw, cls: 'bg-danger-soft text-danger' },
   FEEDBACK_RECEIVED: { icon: MessageSquare, cls: 'bg-brand-soft text-brand' },
   REVIEW_REQUESTED: { icon: ClipboardCheck, cls: 'bg-warning-soft text-warning' },
+  COLLABORATOR_ADDED: { icon: Users, cls: 'bg-info-soft text-info' },
   TASK_OVERDUE: { icon: AlarmClock, cls: 'bg-danger-soft text-danger' },
   DEADLINE_UPCOMING: { icon: BellRing, cls: 'bg-warning-soft text-warning' },
   ACCOUNT_ACTIVATED: { icon: UserCheck, cls: 'bg-success-soft text-success' },

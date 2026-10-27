@@ -23,7 +23,7 @@ export function defaultSettings(nowIso: string): SystemSettings {
     dailyGraceMinutes: 0,
     weeklyDeadlineDayOffset: 1,
     weeklyDeadlineTime: '18:00',
-    reminderTime: '18:00',
+    reminderTimes: ['10:00', '13:00', '16:00', '18:30'],
     primaryTaskSlots: 3,
     minTasksForSubmission: 3,
     allowAdditionalTasks: false,
@@ -49,6 +49,8 @@ export function withSettingsDefaults(stored: Partial<SystemSettings> | null, now
     ...base,
     ...stored,
     notificationTypesEnabled: { ...base.notificationTypesEnabled, ...(stored.notificationTypesEnabled ?? {}) },
+    // Older settings had a single `reminderTime`; they get the default four times.
+    reminderTimes: stored.reminderTimes?.length ? stored.reminderTimes : base.reminderTimes,
   };
 }
 

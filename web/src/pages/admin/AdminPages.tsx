@@ -586,8 +586,9 @@ const NOTIF_LABELS: Record<NotificationType, string> = {
   REPORT_RETURNED: 'Report returned for correction',
   FEEDBACK_RECEIVED: 'Manager feedback / admin correction',
   REVIEW_REQUESTED: 'New report awaiting review (managers)',
+  COLLABORATOR_ADDED: 'Added as a collaborator on someone’s task',
   TASK_OVERDUE: 'Overdue task',
-  DEADLINE_UPCOMING: 'Upcoming reporting deadline reminder',
+  DEADLINE_UPCOMING: 'Reminders to complete the 3 priority tasks (at the reminder times)',
   ACCOUNT_ACTIVATED: 'Account activation',
   MANAGER_REASSIGNED: 'Reporting Manager reassignment',
   PROJECT_ASSIGNED: 'Made project lead or reviewer',
@@ -621,7 +622,27 @@ function SettingsForm({ initial }: { initial: SystemSettings }) {
             <Field label="Company name">{(p) => <Input {...p} value={s.companyName} onChange={(e) => set('companyName', e.target.value)} />}</Field>
             <Field label="Timezone" hint="IANA name, e.g. Asia/Kolkata">{(p) => <Input {...p} value={s.timezone} onChange={(e) => set('timezone', e.target.value)} />}</Field>
             <Field label="Weekly period starts on">{(p) => <Select {...p} value={s.weekStartDay} onChange={(e) => set('weekStartDay', Number(e.target.value))}>{WEEKDAY_NAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}</Select>}</Field>
-            <Field label="Reminder time" hint="Daily deadline reminder (company time)">{(p) => <Input {...p} type="time" value={s.reminderTime} onChange={(e) => set('reminderTime', e.target.value)} />}</Field>
+            <div className="sm:col-span-2">
+              <p className="text-[13px] font-medium">Priority-task reminders</p>
+              <p className="mb-2 mt-0.5 text-[12px] text-muted-foreground">Times (company time) to remind everyone who hasn’t submitted today’s 3 priority tasks, with a sound.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {s.reminderTimes.map((t, i) => (
+                  <span key={i} className="flex items-center gap-0.5">
+                    <Input type="time" aria-label={`Reminder ${i + 1}`} value={t} className="w-[148px]" onChange={(e) => set('reminderTimes', s.reminderTimes.map((x, j) => (j === i ? e.target.value : x)))} />
+                    {s.reminderTimes.length > 1 && (
+                      <Button variant="ghost" size="icon" aria-label={`Remove reminder ${i + 1}`} onClick={() => set('reminderTimes', s.reminderTimes.filter((_, j) => j !== i))}>
+                        <Trash2 />
+                      </Button>
+                    )}
+                  </span>
+                ))}
+                {s.reminderTimes.length < 6 && (
+                  <Button variant="outline" size="sm" onClick={() => set('reminderTimes', [...s.reminderTimes, '17:00'])}>
+                    <Plus /> Add time
+                  </Button>
+                )}
+              </div>
+            </div>
           </CardBody>
         </Card>
         <Card>
