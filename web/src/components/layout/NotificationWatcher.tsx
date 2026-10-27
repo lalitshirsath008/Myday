@@ -98,10 +98,10 @@ export function NotificationWatcher() {
       const { items } = ((e as CustomEvent).detail || {}) as {
         items?: Array<{ id: string; userId: string; read: boolean; title: string; body: string; link: string | null }>;
       };
-      void qc.invalidateQueries({ queryKey: ['notifications.list'] });
       if (items && items.length > 0) {
         const fresh = items.filter((n) => n.userId === me.user.id && !n.read && !announced.current.has(n.id));
         if (fresh.length > 0) {
+          void qc.invalidateQueries({ queryKey: ['notifications.list'] });
           announce(fresh.slice(0, MAX_BANNERS).map((n) => ({ key: n.id, id: n.id, title: n.title, body: n.body, link: n.link })));
         }
       }

@@ -425,7 +425,7 @@ export async function createLiveBackend(): Promise<Backend> {
               } else {
                 const d = c.doc.data();
                 tx.set(COL.notifications, c.doc.id, d as never);
-                if (c.type === 'added' || c.type === 'modified') {
+                if ((c.type === 'added' || c.type === 'modified') && d && !d.read) {
                   freshDocs.push({ ...d, id: c.doc.id });
                 }
               }
@@ -459,7 +459,7 @@ export async function createLiveBackend(): Promise<Backend> {
             .finally(() => {
               isRemoteSync = false;
               const notifChanges = e.data.changes
-                .filter((c: any) => c.col === COL.notifications && c.doc !== null)
+                .filter((c: any) => c.col === COL.notifications && c.doc !== null && !c.doc.read)
                 .map((c: any) => c.doc);
               if (notifChanges.length > 0) {
                 window.dispatchEvent(new CustomEvent('rgk:notifications-synced', { detail: { items: notifChanges } }));
@@ -595,20 +595,8 @@ export async function createLiveBackend(): Promise<Backend> {
       const session = readSession();
       const actor = session ? await store.get<UserDoc & { id: string }>(COL.users, session.uid) : null;
 
-      // Ensure fresh dailyReport, routines and notifications when loading
-      if (actor && (op === 'daily.getForDate' || op === 'routine.get' || op === 'notifications.list')) {
-        if (op === 'notifications.list') {
-          try {
-            const freshNotes = await getDocs(collection(db, 'notifications'));
-            await store.transaction(async (tx) => {
-              freshNotes.forEach((d) => {
-                tx.set(COL.notifications, d.id, d.data() as never);
-              });
-            });
-          } catch {
-            // Firestore read error non-fatal
-          }
-        }
+      // Ensure fresh dailyReport and routines when loading
+      if (actor && (op === 'daily.getForDate' || op === 'routine.get')) {
         const p = payload as { workDate?: string } | undefined;
         const workDate = p?.workDate;
         const targetKey = workDate ? dailyKey(actor.id, workDate) : null;
