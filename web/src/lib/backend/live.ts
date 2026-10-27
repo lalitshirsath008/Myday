@@ -129,6 +129,39 @@ export async function createLiveBackend(): Promise<Backend> {
           body: JSON.stringify({ action: 'mark_synced', syncedIds }),
         });
       }
+
+      // Pull latest notifications from Vercel SQL Database (failover multi-device sync)
+      try {
+        const sqlRes = await fetch('/api/sql');
+        if (sqlRes.ok) {
+          const sqlData = await sqlRes.json();
+          const sqlNotes = sqlData?.tables?.notifications;
+          if (sqlNotes) {
+            const freshIncoming: any[] = [];
+            isRemoteSync = true;
+            await store
+              .transaction(async (tx) => {
+                for (const [id, n] of Object.entries(sqlNotes as Record<string, any>)) {
+                  const current = await tx.get(COL.notifications, id);
+                  if (!current) {
+                    tx.set(COL.notifications, id, n as never);
+                    freshIncoming.push({ ...n, id });
+                  }
+                }
+              })
+              .finally(() => {
+                isRemoteSync = false;
+                if (freshIncoming.length > 0) {
+                  window.dispatchEvent(
+                    new CustomEvent('rgk:notifications-synced', { detail: { items: freshIncoming } })
+                  );
+                }
+              });
+          }
+        }
+      } catch {
+        // SQL notification pull error non-fatal
+      }
     } catch {
       // Background reconciler non-fatal
     }
@@ -651,7 +684,23 @@ export async function createLiveBackend(): Promise<Backend> {
               });
             });
           } catch {
-            // Non-fatal
+            // Fallback: If Firestore read fails (e.g. quota limit), fetch from Vercel SQL
+            try {
+              const sqlRes = await fetch('/api/sql');
+              if (sqlRes.ok) {
+                const sqlData = await sqlRes.json();
+                const sqlNotes = sqlData?.tables?.notifications;
+                if (sqlNotes) {
+                  await store.transaction(async (tx) => {
+                    for (const [id, n] of Object.entries(sqlNotes as Record<string, any>)) {
+                      tx.set(COL.notifications, id, n as never);
+                    }
+                  });
+                }
+              }
+            } catch {
+              // Ignore
+            }
           }
         }
         const p = payload as { workDate?: string } | undefined;
