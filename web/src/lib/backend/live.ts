@@ -74,24 +74,93 @@ export async function createLiveBackend(): Promise<Backend> {
   let isRemoteSync = false;
   const liveBus = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('rgk_live_bus') : null;
 
+  // Vercel Serverless SQL Database & Failover Backup
+  const backupToSql = async (changes: StoreChange[], needsFirebaseSync = false) => {
+    try {
+      await fetch('/api/sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync_delta',
+          changes,
+          authUsers: auth.snapshot(),
+          needsFirebaseSync,
+        }),
+      });
+    } catch {
+      // Offline / background non-blocking
+    }
+  };
+
+  // Automated Reconciler: pushes any SQL queued changes back to Firestore once available
+  const reconcileSqlToFirestore = async () => {
+    try {
+      const res = await fetch('/api/sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_pending_firebase' }),
+      });
+      if (!res.ok) return;
+      const { pending } = (await res.json()) as {
+        pending?: Array<{ id: string; col: string; docId: string; doc: any | null }>;
+      };
+      if (!pending || pending.length === 0) return;
+
+      const syncedIds: string[] = [];
+      for (const item of pending) {
+        try {
+          const ref = doc(db, item.col, item.docId);
+          if (item.doc === null) {
+            await deleteDoc(ref);
+          } else {
+            await setDoc(ref, item.doc);
+          }
+          syncedIds.push(item.id);
+        } catch {
+          // If Firestore is still quota-exhausted or offline, pause and retry on next tick
+          break;
+        }
+      }
+
+      if (syncedIds.length > 0) {
+        await fetch('/api/sql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'mark_synced', syncedIds }),
+        });
+      }
+    } catch {
+      // Background reconciler non-fatal
+    }
+  };
+
   const syncChangesToFirestore = async (changes: StoreChange[]) => {
+    let hadFirestoreError = false;
     for (const ch of changes) {
       if (ch.col === 'uniqueKeys' || ch.col === 'counters') continue;
       const ref = doc(db, ch.col, ch.id);
       if (ch.doc === null) {
-        deleteDoc(ref).catch(() => {});
+        deleteDoc(ref).catch(() => {
+          hadFirestoreError = true;
+        });
       } else {
-        setDoc(ref, ch.doc).catch((err) => {
+        await setDoc(ref, ch.doc).catch((err) => {
+          hadFirestoreError = true;
           console.warn(`Firestore sync [${ch.col}/${ch.id}]:`, err?.message || err);
         });
       }
       if (ch.col === 'users') {
         const u = auth.snapshot().find((a) => a.uid === ch.id);
         if (u) {
-          setDoc(doc(db, 'authUsers', u.uid), u).catch(() => {});
+          setDoc(doc(db, 'authUsers', u.uid), u).catch(() => {
+            hadFirestoreError = true;
+          });
         }
       }
     }
+
+    // Always mirror to Vercel SQL Database. If Firestore rejected (quota exceeded), flag for auto-reconciliation
+    void backupToSql(changes, hadFirestoreError);
   };
 
   const persist = (changes?: StoreChange[]) => {
@@ -240,7 +309,30 @@ export async function createLiveBackend(): Promise<Backend> {
         });
       }
     } catch (err) {
-      console.warn('Hydration from Cloud Firestore notice (offline/initial):', err);
+      console.warn('Hydration from Cloud Firestore notice (offline/quota):', err);
+      // Failover: Hydrate directly from Vercel SQL Database!
+      try {
+        const sqlRes = await fetch('/api/sql');
+        if (sqlRes.ok) {
+          const sqlData = await sqlRes.json();
+          if (sqlData?.tables) {
+            await store.transaction(async (tx) => {
+              for (const [col, docs] of Object.entries(sqlData.tables)) {
+                for (const [id, docData] of Object.entries(docs as Record<string, any>)) {
+                  tx.set(col as any, id, docData);
+                }
+              }
+            });
+          }
+          if (sqlData?.authUsers) {
+            for (const u of Object.values(sqlData.authUsers as Record<string, any>)) {
+              if (u.uid) auth.users.set(u.uid, u);
+            }
+          }
+        }
+      } catch {
+        // Fallback to local storage if offline
+      }
     }
 
     // 2. Ensure baseline ADMIN01 + 23 departments exist
@@ -382,6 +474,10 @@ export async function createLiveBackend(): Promise<Backend> {
   };
 
   await init();
+
+  // Periodic automatic reconciliation: Sync SQL pending data to Cloud Firestore every 30 seconds
+  setInterval(() => void reconcileSqlToFirestore(), 30_000);
+  void reconcileSqlToFirestore();
 
   const listeners = new Set<(s: Session | null) => void>();
 
