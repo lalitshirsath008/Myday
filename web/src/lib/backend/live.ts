@@ -36,7 +36,7 @@ import {
 import { ApiError, AuthFailure, type Backend, type Session } from './types';
 import { readFirebaseEnv } from './firebase';
 
-const DATA_KEY = 'rgk_worktrack_live_db_v2';
+const DATA_KEY = 'rgk_worktrack_live_db_v3';
 const SESSION_KEY = 'rgk_worktrack_live_session_v1';
 
 interface Persisted {

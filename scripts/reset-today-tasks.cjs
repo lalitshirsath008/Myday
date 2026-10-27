@@ -4,12 +4,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const cfg = {
-  apiKey: 'AIzaSyDeZeLTNEVQcfNLFwymHEDxL2DnBfuy3FA',
-  authDomain: 'task-8861a.firebaseapp.com',
-  projectId: 'task-8861a',
-  storageBucket: 'task-8861a.firebasestorage.app',
-  messagingSenderId: '783521347645',
-  appId: '1:783521347645:web:40df826eb1c32c5acf5254'
+  apiKey: 'AIzaSyA9aMBFpGQpL5rpAunqIWUD7fSjXdu8h8Q',
+  authDomain: 'rgk-myday-app.firebaseapp.com',
+  projectId: 'rgk-myday-app',
+  storageBucket: 'rgk-myday-app.firebasestorage.app',
+  messagingSenderId: '387946926063',
+  appId: '1:387946926063:web:29df7e60dea199ad84b01a'
 };
 
 const app = initializeApp(cfg);
