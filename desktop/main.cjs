@@ -30,8 +30,9 @@ let PANEL_URL = new URL('/widget/my-day', APP_URL).toString();
 const TAB = { width: 34, height: 112 };
 const PANEL_WIDTH = 420;
 const BANNER = { width: 392, height: 112 };
+const STRIP = { width: 600, height: 172 };
 
-let tab, panel, tray, banner;
+let tab, panel, tray, banner, strip;
 let lastBlurHide = 0;
 
 const workArea = () => screen.getPrimaryDisplay().workArea;
@@ -241,6 +242,64 @@ function bannerDone() {
   nextBanner();
 }
 
+// ---- "Time to start" strip: slides out of the edge tab when a task's start time comes ----
+let stripQueue = [];
+let stripCurrent = null;
+let stripReady = false;
+
+function stripBounds() {
+  const wa = workArea();
+  const t = tab.getBounds();
+  const y = Math.min(Math.max(Math.round(t.y + t.height / 2 - STRIP.height / 2), wa.y), wa.y + wa.height - STRIP.height);
+  return { x: wa.x + wa.width - STRIP.width, y, ...STRIP };
+}
+
+function createStrip() {
+  strip = new BrowserWindow({
+    ...stripBounds(),
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false,
+    hasShadow: false,
+    thickFrame: false,
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'strip-preload.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      autoplayPolicy: 'no-user-gesture-required',
+    },
+  });
+  strip.setAlwaysOnTop(true, 'screen-saver');
+  strip.loadFile(path.join(__dirname, 'strip.html'));
+  strip.webContents.once('did-finish-load', () => {
+    stripReady = true;
+    nextStrip();
+  });
+}
+
+function nextStrip() {
+  if (!stripReady || stripCurrent || !stripQueue.length) return;
+  stripCurrent = stripQueue.shift();
+  strip.setBounds(stripBounds());
+  strip.webContents.send('strip:show', stripCurrent);
+  strip.showInactive();
+}
+
+function stripDone() {
+  stripCurrent = null;
+  if (!stripQueue.length) strip.hide();
+  nextStrip();
+}
+
 function openLoginSetting() {
   return app.isPackaged ? {} : { path: process.execPath, args: [app.getAppPath()] };
 }
@@ -348,6 +407,21 @@ ipcMain.on('banner:click', (e) => {
   else showPanel();
 });
 ipcMain.on('banner:done', (e) => from(e, banner) && bannerDone());
+// A task's start time came (from the page). Text is length-limited and shown as plain text.
+ipcMain.on('panel:task-alert', (e, a) => {
+  if (!from(e, panel) || !a || typeof a.title !== 'string' || typeof a.time !== 'string' || !/^\d{2}:\d{2}$/.test(a.time)) return;
+  stripQueue.push({
+    title: a.title.slice(0, 200),
+    time: a.time,
+    timeLabel: typeof a.timeLabel === 'string' ? a.timeLabel.slice(0, 20) : a.time,
+    label: typeof a.label === 'string' ? a.label.slice(0, 40) : '',
+    sound: a.sound !== false,
+  });
+  stripQueue = stripQueue.slice(-5);
+  nextStrip();
+});
+ipcMain.on('strip:open', (e) => from(e, strip) && showPanel());
+ipcMain.on('strip:done', (e) => from(e, strip) && stripDone());
 
 // One copy only: starting it again just opens the panel.
 if (!app.requestSingleInstanceLock()) {
@@ -364,6 +438,7 @@ if (!app.requestSingleInstanceLock()) {
     createTab();
     createPanel();
     createBanner();
+    createStrip();
     buildTray();
     powerMonitor.on('resume', () => offline() && panel.loadURL(PANEL_URL));
     screen.on('display-metrics-changed', () => {

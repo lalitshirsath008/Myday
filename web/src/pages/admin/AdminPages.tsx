@@ -587,6 +587,7 @@ const NOTIF_LABELS: Record<NotificationType, string> = {
   FEEDBACK_RECEIVED: 'Manager feedback / admin correction',
   REVIEW_REQUESTED: 'New report awaiting review (managers)',
   COLLABORATOR_ADDED: 'Added as a collaborator on someone’s task',
+  TASK_STATUS_UPDATED: 'A team member changed a submitted task’s status (managers)',
   TASK_OVERDUE: 'Overdue task',
   DEADLINE_UPCOMING: 'Reminders to complete the 3 priority tasks (at the reminder times)',
   ACCOUNT_ACTIVATED: 'Account activation',

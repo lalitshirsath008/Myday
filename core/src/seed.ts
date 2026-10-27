@@ -17,7 +17,11 @@ import { normalizeName, searchTokens, SETTINGS_ID } from './ops/helpers';
 import { codeKey, phoneKey, syntheticEmail } from './ops/auth';
 
 export const DEMO_PASSWORD = 'Test@1234';
-export const ADMIN_PASSWORD = 'RGK@1090';
+/**
+ * First password of the ADMIN01 account in a new database. This code is public, so the password is
+ * too: the account is created with `mustChangePassword`, and the first sign-in must replace it.
+ */
+export const INITIAL_ADMIN_PASSWORD = 'RGK@1090';
 
 interface SeedPerson {
   key: string;
@@ -187,7 +191,7 @@ export async function seedDemoData(
   await auth.createUser({ uid: adminId, email: admin.authEmail, disabled: false });
   await auth.setPassword(adminId, DEMO_PASSWORD);
   await auth.createUser({ uid: 'seed_admin01', email: 'admin@rgk.com', disabled: false });
-  await auth.setPassword('seed_admin01', 'RGK@1090');
+  await auth.setPassword('seed_admin01', DEMO_PASSWORD);
 
   let clock = realNow;
   const ctxFor = async (actorId: string | null): Promise<Ctx> => ({
@@ -416,6 +420,7 @@ export async function seedProductionData(
     primaryReportingManagerId: null,
     secondaryReviewerId: null,
     accountStatus: 'ACTIVE',
+    mustChangePassword: true,
     joinedAt: addDays(today, -60),
     activatedAt: nowIso,
     deactivatedAt: null,
@@ -457,5 +462,5 @@ export async function seedProductionData(
   } catch {
     // Already created
   }
-  await auth.setPassword(admin01Id, 'RGK@1090');
+  await auth.setPassword(admin01Id, INITIAL_ADMIN_PASSWORD);
 }

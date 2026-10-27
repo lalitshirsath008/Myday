@@ -10,6 +10,7 @@ import {
   AppError,
   COL,
   dispatch,
+  INITIAL_ADMIN_PASSWORD,
   MemoryAuth,
   MemoryStore,
   RGK_DEPARTMENTS,
@@ -202,15 +203,11 @@ export async function createLiveBackend(): Promise<Backend> {
       await seedProductionData(store, auth, { appUrl: window.location.origin });
       persist();
     } else {
-      // Ensure admin auth record and password RGK@1090 is always synced
-      try {
-        const u = [...auth.users.values()].find((x) => x.email === 'admin@rgk.com');
-        if (!u) {
-          await auth.createUser({ uid: 'seed_admin01', email: 'admin@rgk.com', disabled: false });
-        }
-        await auth.setPassword('seed_admin01', 'RGK@1090');
-      } catch {
-        // Already set
+      // The first admin password is public (it is in this code). While it still works, the next
+      // sign-in must choose a new one. The password is never reset back to it.
+      const stillInitial = !('error' in (await auth.verify(adminExists.authEmail, INITIAL_ADMIN_PASSWORD)));
+      if (stillInitial && !adminExists.mustChangePassword) {
+        await store.transaction(async (tx) => tx.update(COL.users, adminExists.id, { mustChangePassword: true }));
       }
 
       // Ensure all 23 departments exist
@@ -281,34 +278,24 @@ export async function createLiveBackend(): Promise<Backend> {
 
       let r = await auth.verify(targetEmail, password);
 
-      // Fallback for ADMIN01
+      // Not found here: the account may have been created or changed on another device.
       if ('error' in r) {
-        if ((input.toUpperCase() === 'ADMIN01' || targetEmail === 'admin@rgk.com') && password === 'RGK@1090') {
-          try {
-            await auth.setPassword('seed_admin01', 'RGK@1090');
-          } catch {
-            await seedProductionData(store, auth, { appUrl: window.location.origin });
-          }
-          r = { uid: 'seed_admin01' };
-        } else {
-          // Check Firestore if authUsers has record (e.g. created on another device)
-          try {
-            const authSnap = await getDocs(collection(db, 'authUsers'));
-            authSnap.forEach((d) => {
-              const u = d.data() as {
-                uid: string;
-                email: string;
-                disabled: boolean;
-                salt: string | null;
-                hash: string | null;
-                tokensValidAfter: number;
-              };
-              if (u.uid) auth.users.set(u.uid, u);
-            });
-            r = await auth.verify(targetEmail, password);
-          } catch {
-            // Ignore
-          }
+        try {
+          const authSnap = await getDocs(collection(db, 'authUsers'));
+          authSnap.forEach((d) => {
+            const u = d.data() as {
+              uid: string;
+              email: string;
+              disabled: boolean;
+              salt: string | null;
+              hash: string | null;
+              tokensValidAfter: number;
+            };
+            if (u.uid) auth.users.set(u.uid, u);
+          });
+          r = await auth.verify(targetEmail, password);
+        } catch {
+          // Ignore
         }
       }
 

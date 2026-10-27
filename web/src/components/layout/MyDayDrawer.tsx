@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/misc';
 import { PillSwitch } from '@/components/ui/pill-switch';
 import { DesktopAppOffer } from './DesktopAppOffer';
 import { PANEL_NOTIFICATIONS, PanelNotifications } from './PanelNotifications';
+import { type StartAlert, TaskStartStrip, useTaskStartAlerts } from './TaskStartAlerts';
 import { TodayPriorityTasks } from './TodayPriorityTasks';
 import { useOp, useOpMutation } from '@/lib/api';
 import { useMe } from '@/lib/session';
@@ -295,8 +296,12 @@ export function MyDayDrawer() {
   const state = useMyDay();
   const [open, setOpen] = useState(false);
   const { items, done } = state;
+  // When a timed task's start time comes, a strip slides out of the tab (with a chime).
+  const [alerts, setAlerts] = useState<StartAlert[]>([]);
+  useTaskStartAlerts(items, (a) => setAlerts((cur) => [...cur, a]));
   return (
     <D.Root open={open} onOpenChange={setOpen}>
+      <TaskStartStrip alerts={alerts} onOpen={() => setOpen(true)} onDone={() => setAlerts((cur) => cur.slice(1))} />
       <D.Trigger asChild>
         <button
           type="button"

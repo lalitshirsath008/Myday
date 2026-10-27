@@ -2,7 +2,7 @@
   "name": "rgk-worktrack-desktop",
   "private": true,
   "version": "1.0.0",
-  "description": "RGK WorkTrack desktop companion \u2014 the My day tab on the edge of your screen",
+  "description": "RGK Myday desktop companion \u2014 the My day tab on the edge of your screen",
   "author": "RGK Group of Industries",
   "main": "main.cjs",
   "scripts": {
@@ -16,12 +16,14 @@
   },
   "build": {
     "appId": "net.rgkgroup.worktrack.desktop",
-    "productName": "RGK WorkTrack",
+    "productName": "RGK Myday",
     "files": [
       "main.cjs",
       "tab.html",
       "banner-preload.cjs",
       "banner.html",
+      "strip-preload.cjs",
+      "strip.html",
       "tab-preload.cjs",
       "panel-preload.cjs",
       "config.json",
@@ -38,8 +40,8 @@
       "oneClick": true,
       "perMachine": false,
       "createDesktopShortcut": true,
-      "shortcutName": "RGK WorkTrack",
-      "artifactName": "RGK-WorkTrack-Setup-${version}.${ext}"
+      "shortcutName": "RGK Myday",
+      "artifactName": "RGK-Myday-Setup.${ext}"
     },
     "electronFuses": {
       "runAsNode": false,
@@ -47,6 +49,10 @@
       "enableNodeCliInspectArguments": false,
       "onlyLoadAppFromAsar": true,
       "enableEmbeddedAsarIntegrityValidation": true
-    }
+    },
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US"
+    ]
   }
 }

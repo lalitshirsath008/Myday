@@ -7,6 +7,7 @@ import { DateRangeFilter, FilterSelect, FilterSheetButton, rangeFor, useDepartme
 import { DefinitionList, ListCard, PageHeader } from '@/components/common/layout';
 import { StatusBadge, statusLabel } from '@/components/common/StatusBadge';
 import { ReviewPanel, ReviewTimeline, TaskCardView, VersionHistory } from '@/components/reports/ReportParts';
+import { TaskStatusUpdater } from '@/components/reports/TaskStatusUpdater';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody } from '@/components/ui/card';
 import { Disclosure, EmptyState, ErrorState, Notice, PageSkeleton, Segmented, Skeleton } from '@/components/ui/misc';
@@ -193,6 +194,8 @@ export function DailyReportDetailPage({ mode }: { mode: 'own' | 'review' | 'admi
   if (q.isLoading) return <PageSkeleton />;
   if (q.error || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   const { report, employee } = q.data;
+  // Own submitted report: each task's status can still be updated with a comment.
+  const canUpdate = q.data.isOwner && report.version > 0 && report.reviewStatus !== 'RETURNED' && report.workDate >= addDays(me.today, -me.settings.maxBackdateDays);
   const back = mode === 'review' ? { to: '/reviews/pending', label: 'To review' } : mode === 'admin' ? { to: '/admin/reports/daily', label: 'Reports' } : { to: '/reports/daily', label: 'Report history' };
   const done = report.tasks.filter((t) => t.status === 'COMPLETED').length;
 
@@ -238,7 +241,14 @@ export function DailyReportDetailPage({ mode }: { mode: 'own' | 'review' | 'admi
 
       <section className="space-y-3 print-area" aria-label="Tasks">
         {report.tasks.map((t) => (
-          <TaskCardView key={t.slot} task={t} people={q.data.people} projects={q.data.projects} today={me.today} />
+          <div key={t.slot} className="space-y-2">
+            <TaskCardView task={t} people={q.data.people} projects={q.data.projects} today={me.today} />
+            {canUpdate && (
+              <Disclosure title={`Update status of task ${t.slot}`} className="no-print">
+                <TaskStatusUpdater compact key={`${t.slot}_${report.revision}`} reportId={report.id} task={t} />
+              </Disclosure>
+            )}
+          </div>
         ))}
       </section>
 

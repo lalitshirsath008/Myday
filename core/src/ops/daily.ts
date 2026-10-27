@@ -292,7 +292,8 @@ export const dailyOps = {
         } else if (input.expectedRevision !== null) {
           throw conflict();
         }
-        const tasks = toTaskEntries(input.tasks, me, settings);
+        // Keep each task's status-update history when the report is edited again (e.g. after a return).
+        const tasks = toTaskEntries(input.tasks, me, settings).map((t, i) => (existing?.tasks[i]?.updates ? { ...t, updates: existing.tasks[i].updates } : t));
         const base: DailyReportDoc = existing ?? {
           id,
           employeeId: me.id,
@@ -373,6 +374,65 @@ export const dailyOps = {
         return report;
       });
       return { report: saved };
+    },
+  }),
+
+  /**
+   * After submitting, keep a task's status up to date (In progress → Done / Blocked …) with a comment.
+   * Only the status and progress change: the report is not reopened and its review is not reset.
+   * The manager is told. Own reports only, within the backdating window.
+   */
+  'daily.updateTaskStatus': op({
+    input: z.object({
+      reportId: z.string().min(1),
+      slot: z.number().int().min(1).max(10),
+      status: z.enum(TASK_STATUSES),
+      progressPercentage: z.number().int().min(0).max(100).nullable().default(null),
+      comment: z.string().trim().min(2, 'Add a short comment about the change.').max(500),
+    }),
+    run: async (ctx, input) => {
+      const settings = await getSettings(ctx);
+      const me = ctx.actor;
+      const today = todayIn(settings.timezone, ctx.now());
+      return ctx.store.transaction(async (tx) => {
+        const report = await tx.get<DailyReportDoc & { id: string }>(COL.dailyReports, input.reportId);
+        if (!report || report.employeeId !== me.id) throw notFound('Daily report');
+        if (report.version === 0) throw precondition('Submit the report first. Until then, change the status in the report itself.');
+        if (diffDays(report.workDate, today) > settings.maxBackdateDays) throw precondition(`Tasks older than ${settings.maxBackdateDays} days can no longer be updated.`);
+        const i = report.tasks.findIndex((t) => t.slot === input.slot);
+        const task = report.tasks[i];
+        if (!task) throw notFound('Task');
+        const progress = input.status === 'COMPLETED' ? 100 : (input.progressPercentage ?? task.progressPercentage);
+        if (input.status === task.status && progress === task.progressPercentage) throw invalid('Nothing changed. Pick a new status or progress.');
+        const now = nowIso(ctx);
+        const update = { at: now, byName: me.fullName, from: task.status, to: input.status, progress, comment: input.comment };
+        const next: DailyReportDoc = {
+          ...report,
+          tasks: report.tasks.map((t, j) => (j === i ? { ...t, status: input.status, progressPercentage: progress, updates: [...(t.updates ?? []), update].slice(-50) } : t)),
+          revision: report.revision + 1,
+          updatedAt: now,
+        };
+        tx.set(COL.dailyReports, report.id, next as unknown as DailyReportDoc & { id: string });
+        syncTaskIndex(tx, next, report.tasks.length, now);
+        audit(tx, ctx, {
+          action: 'TASK_STATUS_UPDATED',
+          entityType: 'dailyReport',
+          entityId: report.id,
+          beforeSnapshot: { slot: input.slot, status: task.status, progress: task.progressPercentage },
+          afterSnapshot: { slot: input.slot, status: input.status, progress, comment: input.comment },
+        });
+        const label = { PLANNED: 'Planned', IN_PROGRESS: 'In progress', COMPLETED: 'Done', BLOCKED: 'Blocked' }[input.status];
+        for (const reviewer of new Set([me.primaryReportingManagerId, me.secondaryReviewerId])) {
+          notify(tx, ctx, settings, {
+            userId: reviewer,
+            type: 'TASK_STATUS_UPDATED',
+            title: input.status === 'BLOCKED' ? `${me.fullName}: task blocked` : `${me.fullName} updated a task`,
+            body: `“${task.title}” is now ${label} (${progress}%): “${input.comment}”`,
+            link: `/reviews/daily/${report.id}`,
+          });
+        }
+        return { report: next };
+      });
     },
   }),
 

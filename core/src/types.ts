@@ -99,6 +99,16 @@ export interface ProjectDoc {
   updatedAt: string;
 }
 
+/** A status change made after the report was submitted, with the employee's comment. */
+export interface TaskStatusUpdate {
+  at: string;
+  byName: string;
+  from: TaskStatus;
+  to: TaskStatus;
+  progress: number;
+  comment: string;
+}
+
 export interface TaskEntry {
   slot: number;
   isPrimary: boolean;
@@ -118,6 +128,8 @@ export interface TaskEntry {
   progressPercentage: number;
   status: TaskStatus;
   notes: string;
+  /** Status updates after submission, oldest first (at most 50). */
+  updates?: TaskStatusUpdate[];
 }
 
 export interface WorkingDayInfo {
@@ -324,6 +336,7 @@ export const NOTIFICATION_TYPES = [
   'MANAGER_REASSIGNED',
   'PROJECT_ASSIGNED',
   'COLLABORATOR_ADDED',
+  'TASK_STATUS_UPDATED',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

@@ -3,9 +3,12 @@ import { useEffect } from 'react';
 import { Link } from 'react-router';
 import { MyDayPanel, useMyDay } from '@/components/layout/MyDayDrawer';
 import { NotificationWatcher } from '@/components/layout/NotificationWatcher';
+import { useTaskStartAlerts } from '@/components/layout/TaskStartAlerts';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/misc';
+import { soundEnabled } from '@/lib/notifySound';
 import { useSession } from '@/lib/session';
+import { fmtTime } from '@/lib/utils';
 
 /** Bridge exposed by the desktop app (desktop/panel-preload.cjs). Absent in a normal browser; older app versions lack the optional parts. */
 declare global {
@@ -16,12 +19,19 @@ declare global {
       setUnread?: (unread: number) => void;
       notify?: (n: { id: string | null; title: string; body: string; link: string | null; sound: boolean }) => void;
       onNotificationOpened?: (fn: (id: string) => void) => () => void;
+      taskAlert?: (a: { title: string; time: string; timeLabel: string; label: string; sound: boolean }) => void;
     };
   }
 }
 
 function Panel() {
   const state = useMyDay();
+  // Start-time strip over every app (desktop app); older app versions get a notification banner instead.
+  useTaskStartAlerts(state.items, (a) => {
+    const w = window.rgkWidget;
+    if (w?.taskAlert) w.taskAlert({ title: a.title, time: a.time, timeLabel: fmtTime(a.time), label: a.label, sound: soundEnabled() });
+    else w?.notify?.({ id: null, title: `${fmtTime(a.time)} · Time to start`, body: `${a.title} (${a.label})`, link: null, sound: soundEnabled() });
+  });
   useEffect(() => {
     window.rgkWidget?.setCount(state.done, state.items.length);
   }, [state.done, state.items.length]);

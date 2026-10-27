@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Disclosure, ErrorState, Notice, PageSkeleton, Segmented } from '@/components/ui/misc';
+import { TaskStatusUpdater } from '@/components/reports/TaskStatusUpdater';
 import { useOp, useOpMutation } from '@/lib/api';
 import { useMe } from '@/lib/session';
 import { cn, fmtDate, fmtDateTime, fmtTime } from '@/lib/utils';
@@ -107,14 +108,27 @@ export function DailyEntryPage() {
   const q = useOp('daily.getForDate', { workDate });
   const collabIds = useMemo(() => [...new Set(q.data?.report?.tasks.flatMap((t) => t.collaboratorIds) ?? [])], [q.data]);
   const people = useOp('lookup.people', { ids: collabIds }, { enabled: collabIds.length > 0 });
+  // The selected task tab survives the form reloading after a save or status update (same date only).
+  const [tab, setTab] = useState({ date: workDate, index: 0 });
+  const active = tab.date === workDate ? tab.index : 0;
 
   if (q.isLoading || (collabIds.length > 0 && people.isLoading)) return <PageSkeleton />;
   if (q.error || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   const peopleMap = new Map((people.data?.items ?? []).map((p) => [p.id, { id: p.id, fullName: p.fullName, employeeCode: p.employeeCode }]));
-  return <DailyForm key={`${workDate}-${q.data.report?.revision ?? 0}`} data={q.data} people={peopleMap} />;
+  return <DailyForm key={`${workDate}-${q.data.report?.revision ?? 0}`} data={q.data} people={peopleMap} active={active} setActive={(index) => setTab({ date: workDate, index })} />;
 }
 
-function DailyForm({ data, people }: { data: NonNullable<ReturnType<typeof useOp<'daily.getForDate'>>['data']>; people: Map<string, PickedPerson> }) {
+function DailyForm({
+  data,
+  people,
+  active,
+  setActive,
+}: {
+  data: NonNullable<ReturnType<typeof useOp<'daily.getForDate'>>['data']>;
+  people: Map<string, PickedPerson>;
+  active: number;
+  setActive: (index: number) => void;
+}) {
   const me = useMe();
   const navigate = useNavigate();
   const s = me.settings;
@@ -126,7 +140,6 @@ function DailyForm({ data, people }: { data: NonNullable<ReturnType<typeof useOp
     return list;
   }, [report, people, slots]);
   const [tasks, setTasks] = useState<FormTask[]>(initial);
-  const [active, setActive] = useState(0);
   const [notes, setNotes] = useState(report?.employeeNotes ?? '');
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -318,6 +331,11 @@ function DailyForm({ data, people }: { data: NonNullable<ReturnType<typeof useOp
           </button>
         )}
       </div>
+
+      {/* Submitted: the report is locked, but each task's status can still be updated with a comment. */}
+      {report && report.version > 0 && !editable && report.tasks[active] && data.workDate >= addDays(data.today, -s.maxBackdateDays) && (
+        <TaskStatusUpdater key={`${report.id}_${active}_${report.revision}`} reportId={report.id} task={report.tasks[active]!} />
+      )}
 
       <form
         onSubmit={(e) => {

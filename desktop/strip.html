@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <title>Time to start</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+      }
+      /* The strip comes out of the right screen edge, where the My day tab sits. */
+      .strip {
+        position: absolute;
+        right: 0;
+        top: 18px;
+        width: 572px;
+        border-radius: 28px 0 0 28px;
+        overflow: hidden;
+        color: #fff;
+        background: linear-gradient(90deg, #b84a08, #d45a0a 55%, #f07418);
+        box-shadow: 0 14px 36px rgba(200, 83, 10, 0.45);
+        transform: translateX(100%);
+      }
+      .strip.in {
+        animation: in 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.1) forwards;
+      }
+      .strip.out {
+        animation: out 0.32s ease-in forwards;
+      }
+      @keyframes in {
+        to {
+          transform: none;
+        }
+      }
+      @keyframes out {
+        from {
+          transform: none;
+        }
+        to {
+          transform: translateX(100%);
+        }
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 12px 16px 20px;
+      }
+      .main {
+        all: unset;
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        cursor: pointer;
+      }
+      .icon {
+        width: 56px;
+        height: 56px;
+        flex: none;
+        border-radius: 16px;
+        background: #fff;
+        color: #c8530a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+      }
+      .text {
+        min-width: 0;
+        flex: 1;
+      }
+      .when {
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.85;
+      }
+      .title {
+        margin-top: 2px;
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.2;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .label {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 2px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.2);
+        font-size: 11.5px;
+        font-weight: 500;
+      }
+      .hide {
+        width: 44px;
+        height: 44px;
+        flex: none;
+        border: none;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .hide:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .bar {
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .bar div {
+        height: 100%;
+        background: rgba(255, 255, 255, 0.7);
+        transform-origin: left;
+      }
+      .bar div.run {
+        animation: countdown 5s linear forwards;
+      }
+      @keyframes countdown {
+        from {
+          transform: scaleX(1);
+        }
+        to {
+          transform: scaleX(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .strip.in,
+        .strip.out {
+          animation-duration: 0.01ms;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="strip" id="strip" role="alert">
+      <div class="row">
+        <button class="main" id="open" type="button">
+          <span class="icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2" /><path d="M5 3 2 6" /><path d="m22 6-3-3" /><path d="M6.38 18.7 4 21" /><path d="M17.64 18.67 20 21" /></svg>
+          </span>
+          <span class="text">
+            <span class="when" id="when"></span>
+            <span class="title" id="title"></span>
+            <span class="label" id="label"></span>
+          </span>
+        </button>
+        <button class="hide" id="hide" type="button" aria-label="Hide">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+      </div>
+      <div class="bar" aria-hidden="true"><div id="countdown"></div></div>
+    </div>
+    <script>
+      const strip = document.getElementById('strip');
+      const countdown = document.getElementById('countdown');
+      let timer = null;
+      let leaving = false;
+      let ctx = null;
+
+      // Same soft three-note chime as the website (web/src/lib/notifySound.ts).
+      function chime() {
+        try {
+          ctx = ctx || new AudioContext();
+          const t0 = ctx.currentTime + 0.02;
+          const master = ctx.createGain();
+          master.gain.value = 0.16;
+          master.connect(ctx.destination);
+          for (const [freq, at] of [[1318.51, 0], [1567.98, 0.1], [2093.0, 0.2]]) {
+            for (const [mult, level] of [[1, 1], [2, 0.16]]) {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.value = freq * mult;
+              gain.gain.setValueAtTime(0.0001, t0 + at);
+              gain.gain.exponentialRampToValueAtTime(level, t0 + at + 0.012);
+              gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.7);
+              osc.connect(gain).connect(master);
+              osc.start(t0 + at);
+              osc.stop(t0 + at + 0.75);
+            }
+          }
+        } catch {
+          // No audio device: the strip still shows.
+        }
+      }
+
+      function leave() {
+        if (leaving) return;
+        leaving = true;
+        clearTimeout(timer);
+        strip.classList.remove('in');
+        strip.classList.add('out');
+        setTimeout(() => window.rgkStrip.done(), 330);
+      }
+      const startTimer = (ms) => {
+        clearTimeout(timer);
+        timer = setTimeout(leave, ms);
+      };
+
+      window.rgkStrip.onShow((a) => {
+        leaving = false;
+        // textContent only: task text is never treated as HTML.
+        document.getElementById('when').textContent = `${a.timeLabel} · Time to start`;
+        document.getElementById('title').textContent = a.title;
+        document.getElementById('label').textContent = a.label;
+        strip.setAttribute('aria-label', `${a.timeLabel}, time to start: ${a.title}`);
+        strip.classList.remove('in', 'out');
+        countdown.classList.remove('run');
+        void strip.offsetWidth; // restart the animations
+        strip.classList.add('in');
+        countdown.classList.add('run');
+        if (a.sound) chime();
+        startTimer(5000);
+      });
+      document.getElementById('open').addEventListener('click', () => {
+        window.rgkStrip.open();
+        leave();
+      });
+      document.getElementById('hide').addEventListener('click', leave);
+    </script>
+  </body>
+</html>

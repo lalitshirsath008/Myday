@@ -1,7 +1,8 @@
 import { ArrowRight, Check, CheckCircle2, Pencil } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { TaskStatusUpdater } from '@/components/reports/TaskStatusUpdater';
 import { Skeleton } from '@/components/ui/misc';
 import { useOp } from '@/lib/api';
 import { useMe } from '@/lib/session';
@@ -39,6 +40,9 @@ export function TodayPriorityTasks({ onNavigate }: { onNavigate?: () => void }) 
   const returned = report?.reviewStatus === 'RETURNED';
   const filled = primary.filter((t) => t.title.trim()).length;
   const restDay = d && !d.workingDay.isWorkingDay && !report;
+  // After submitting, a task's status is updated right here (with a comment).
+  const canUpdate = !!report && report.version > 0 && !d?.editable;
+  const [editing, setEditing] = useState<number | null>(null);
 
   return (
     <section className="px-4 pt-3" aria-labelledby="priority-heading">
@@ -110,11 +114,26 @@ export function TodayPriorityTasks({ onNavigate }: { onNavigate?: () => void }) 
                       {time && <span>{time}</span>}
                     </span>
                   </span>
-                  <span className="shrink-0 pt-0.5 text-[11.5px] font-medium tabular-nums text-muted-foreground">{t.progressPercentage}%</span>
+                  <span className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                    <span className="text-[11.5px] font-medium tabular-nums text-muted-foreground">{t.progressPercentage}%</span>
+                    {canUpdate && editing !== i && (
+                      <button type="button" onClick={() => setEditing(i)} className="cursor-pointer rounded-md px-1.5 py-0.5 text-[11.5px] font-medium text-primary hover:bg-brand-soft" aria-label={`Update status of task ${i + 1}`}>
+                        Update
+                      </button>
+                    )}
+                  </span>
                 </div>
                 <div className="ml-[34px] mt-1.5 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
                   <div className={cn('h-full rounded-full', done ? 'bg-success' : 'bg-brand')} style={{ width: `${t.progressPercentage}%` }} />
                 </div>
+                {canUpdate && editing === i && report && (
+                  <div className="mt-2.5 border-t pt-2.5">
+                    <TaskStatusUpdater compact reportId={report.id} task={t} onDone={() => setEditing(null)} />
+                    <button type="button" onClick={() => setEditing(null)} className="mt-1 cursor-pointer text-[12px] text-muted-foreground hover:text-foreground">
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}

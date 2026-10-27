@@ -473,6 +473,34 @@ describe('daily routine (personal tasks besides the 3 priorities)', () => {
   });
 });
 
+describe('task status updates after submission', () => {
+  it('lets the employee move a submitted task to Done or Blocked with a comment, keeps history, and tells the manager', async () => {
+    const w = await makeWorld();
+    // Not possible on a draft: it is edited in the report itself.
+    const draft = await w.call('e1', 'daily.save', { workDate: TODAY, tasks: threeTasks(), employeeNotes: '', submit: false, expectedRevision: null });
+    await expectCode(w.call('e1', 'daily.updateTaskStatus', { reportId: draft.report.id, slot: 1, status: 'COMPLETED', comment: 'Done' }), 'failed-precondition');
+    const sub = await w.call('e1', 'daily.save', { workDate: TODAY, tasks: threeTasks(), employeeNotes: '', submit: true, expectedRevision: draft.report.revision });
+    const id = sub.report.id;
+    // A comment is required.
+    await expectCode(w.call('e1', 'daily.updateTaskStatus', { reportId: id, slot: 1, status: 'COMPLETED', comment: ' ' }), 'invalid-argument');
+    const r1 = await w.call('e1', 'daily.updateTaskStatus', { reportId: id, slot: 1, status: 'COMPLETED', comment: 'Shift report sent to the plant head' });
+    expect(r1.report.tasks[0]).toMatchObject({ status: 'COMPLETED', progressPercentage: 100 });
+    expect(r1.report.tasks[0]!.updates).toEqual([expect.objectContaining({ from: 'IN_PROGRESS', to: 'COMPLETED', progress: 100, comment: 'Shift report sent to the plant head' })]);
+    // The review is not reset and the submitted version stays the same.
+    expect(r1.report).toMatchObject({ version: sub.report.version, reviewStatus: 'PENDING_REVIEW' });
+    await w.call('e1', 'daily.updateTaskStatus', { reportId: id, slot: 2, status: 'BLOCKED', progressPercentage: 40, comment: 'Waiting for die from vendor' });
+    const mgr = (await w.call('rm1', 'notifications.list', { unreadOnly: false, limit: 50 })).items.filter((n) => n.type === 'TASK_STATUS_UPDATED');
+    expect(mgr.map((n) => n.title)).toEqual(expect.arrayContaining(['Rohan Patil (Test) updated a task', 'Rohan Patil (Test): task blocked']));
+    // Analytics see the new status, and nobody else can change it.
+    const detail = await w.call('rm1', 'daily.get', { reportId: id });
+    expect(detail.report.tasks.map((t) => t.status)).toEqual(['COMPLETED', 'BLOCKED', 'IN_PROGRESS']);
+    await expectCode(w.call('e2', 'daily.updateTaskStatus', { reportId: id, slot: 3, status: 'COMPLETED', comment: 'Not mine' }), 'not-found');
+    await expectCode(w.call('rm1', 'daily.updateTaskStatus', { reportId: id, slot: 3, status: 'COMPLETED', comment: 'Manager' }), 'not-found');
+    // Nothing changed → refused; history survives a later approval.
+    await expectCode(w.call('e1', 'daily.updateTaskStatus', { reportId: id, slot: 1, status: 'COMPLETED', comment: 'Again' }), 'invalid-argument');
+  });
+});
+
 describe('collaborator notifications', () => {
   it('notifies a person once when added to a task, and only the newly added people later', async () => {
     const w = await makeWorld();

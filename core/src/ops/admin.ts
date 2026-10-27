@@ -659,6 +659,7 @@ export const adminOps = {
                 isPrimary: i < settings.primaryTaskSlots,
                 departmentId: r.departmentId,
                 collaboratorIds: t.collaboratorIds.filter((c) => c !== r.employeeId),
+                ...(r.tasks[i]?.updates ? { updates: r.tasks[i].updates } : {}),
               }))
             : r.tasks;
           const reReview = settings.reReviewOnAdminCorrection && r.reviewStatus === 'APPROVED';

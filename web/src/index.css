@@ -278,6 +278,28 @@
     transform: translateY(-16px) scale(0.96);
   }
 }
+/* Task start strip: slides out of the My day tab at the right edge, and back in */
+@keyframes strip-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes strip-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes strip-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
 
 @layer base {
   * {

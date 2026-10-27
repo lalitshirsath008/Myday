@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/form';
 import { Menu, Progress } from '@/components/ui/misc';
+import { TaskUpdateHistory } from './TaskStatusUpdater';
 import { useOp, useOpMutation } from '@/lib/api';
 import { cn, fmtDate, fmtDateTime, fmtTime } from '@/lib/utils';
 
@@ -87,6 +88,7 @@ export function TaskCardView({
           </div>
         )}
       </dl>
+      {task.updates?.length ? <TaskUpdateHistory updates={task.updates} className="mt-4 border-t pt-3" /> : null}
     </article>
   );
 }

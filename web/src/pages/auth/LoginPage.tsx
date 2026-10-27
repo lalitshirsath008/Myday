@@ -54,7 +54,7 @@ export function LoginPage() {
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {error && <Notice tone="danger">{error}</Notice>}
         <Field label="Employee code, mobile number or email" required error={formState.errors.identifier?.message}>
-          {(p) => <Input {...p} {...register('identifier')} autoComplete="username" placeholder="ADMIN01, 98XXXXXXXX or admin@rgk.com" autoFocus />}
+          {(p) => <Input {...p} {...register('identifier')} autoComplete="username" placeholder="Employee code, mobile or email" autoFocus />}
         </Field>
         <Field label="Password" required error={formState.errors.password?.message}>
           {(p) => (

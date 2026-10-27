@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('rgkWidget', {
   setCount: (done, total) => ipcRenderer.send('panel:count', done, total),
   setUnread: (unread) => ipcRenderer.send('panel:unread', unread),
   notify: (n) => ipcRenderer.send('panel:notify', n),
+  taskAlert: (a) => ipcRenderer.send('panel:task-alert', a),
   onNotificationOpened: (fn) => {
     const handler = (_e, id) => fn(id);
     ipcRenderer.on('notification:opened', handler);

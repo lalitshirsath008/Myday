@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-/** Written by desktop/publish.cjs next to the installer. */
+/** Written by desktop/publish.cjs. `url` is where the installer is hosted (a GitHub Release). */
 interface DesktopManifest {
   version: string;
   appUrl: string;
   file: string;
+  url: string | null;
   size: number;
 }
 
@@ -36,21 +37,12 @@ export function DesktopAppOffer() {
     staleTime: 60 * 60_000,
     retry: false,
     queryFn: async (): Promise<DesktopManifest | null> => {
-      try {
-        const r = await fetch('/downloads/desktop.json', { cache: 'no-cache' });
-        if (r.ok && r.headers.get('content-type')?.includes('json')) {
-          const m = (await r.json()) as DesktopManifest;
-          if (m && /^[\w.-]+\.exe$/.test(m.file)) return m;
-        }
-      } catch {
-        // Use default manifest
-      }
-      return {
-        version: '1.0.0',
-        appUrl: window.location.origin,
-        file: 'RGK-WorkTrack-Setup.exe',
-        size: 120421492,
-      };
+      const r = await fetch('/downloads/desktop.json', { cache: 'no-cache' });
+      if (!r.ok || !r.headers.get('content-type')?.includes('json')) return null;
+      const m = (await r.json()) as DesktopManifest;
+      // Only an installer built for this very site, from this site or an https download link.
+      const hosted = m.url ? /^https:\/\//.test(m.url) : /^[\w.-]+\.exe$/.test(m.file);
+      return m.appUrl === window.location.origin && hosted ? m : null;
     },
   });
   const m = q.data;
@@ -73,8 +65,8 @@ export function DesktopAppOffer() {
           My day on your desktop
         </p>
         <a
-          href={`/downloads/${m.file}`}
-          download={m.file}
+          href={m.url ?? `/downloads/${m.file}`}
+          download={m.url ? undefined : m.file}
           onClick={() => setStarted(true)}
           aria-label={`Download the Windows app (${Math.round(m.size / 1_048_576)} MB)`}
           className={cn(buttonVariants({ size: 'sm' }), 'h-7 shrink-0 rounded-lg px-2.5 text-[12px]')}

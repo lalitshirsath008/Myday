@@ -269,6 +269,7 @@ const NOTIF_ICON: Record<NotificationType, { icon: LucideIcon; cls: string }> = 
   FEEDBACK_RECEIVED: { icon: MessageSquare, cls: 'bg-brand-soft text-brand' },
   REVIEW_REQUESTED: { icon: ClipboardCheck, cls: 'bg-warning-soft text-warning' },
   COLLABORATOR_ADDED: { icon: Users, cls: 'bg-info-soft text-info' },
+  TASK_STATUS_UPDATED: { icon: CheckCheck, cls: 'bg-info-soft text-info' },
   TASK_OVERDUE: { icon: AlarmClock, cls: 'bg-danger-soft text-danger' },
   DEADLINE_UPCOMING: { icon: BellRing, cls: 'bg-warning-soft text-warning' },
   ACCOUNT_ACTIVATED: { icon: UserCheck, cls: 'bg-success-soft text-success' },
