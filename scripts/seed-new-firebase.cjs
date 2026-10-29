@@ -2,12 +2,12 @@ const { initializeApp } = require('firebase/app');
 const { getFirestore, doc, setDoc } = require('firebase/firestore');
 
 const cfg = {
-  apiKey: 'AIzaSyA9aMBFpGQpL5rpAunqIWUD7fSjXdu8h8Q',
-  authDomain: 'rgk-myday-app.firebaseapp.com',
-  projectId: 'rgk-myday-app',
-  storageBucket: 'rgk-myday-app.firebasestorage.app',
-  messagingSenderId: '387946926063',
-  appId: '1:387946926063:web:29df7e60dea199ad84b01a'
+  apiKey: 'AIzaSyDeZeLTNEVQcfNLFwymHEDxL2DnBfuy3FA',
+  authDomain: 'task-8861a.firebaseapp.com',
+  projectId: 'task-8861a',
+  storageBucket: 'task-8861a.firebasestorage.app',
+  messagingSenderId: '783521347645',
+  appId: '1:783521347645:web:40df826eb1c32c5acf5254'
 };
 
 const app = initializeApp(cfg);
@@ -166,7 +166,7 @@ const DEPARTMENTS = [
 ];
 
 async function seed() {
-  console.log('Seeding rgk-myday-app Firestore...');
+  console.log('Seeding task-8861a Firestore...');
 
   // 1. Auth Users
   for (const [uid, authData] of Object.entries(SEED_AUTH)) {
